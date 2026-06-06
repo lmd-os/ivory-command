@@ -16,14 +16,23 @@ export const meta = {
   label: 'OpenSky Network',
   kind: 'primary',
   requiresKey: false,
+  skipHint: 'Anonymous API unreachable server-side — set OPENSKY_CLIENT_ID/SECRET to enable',
 };
 
 const TOKEN_URL =
   'https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token';
 const STATES_URL = 'https://opensky-network.org/api/states/all';
 
-export function isConfigured() {
-  return true; // anonymous access is possible (best-effort)
+/**
+ * Participate only when OAuth2 credentials are configured. OpenSky's anonymous
+ * REST API is effectively unreachable from serverless egress (verified: times
+ * out), so running it by default only adds latency. Set OPENSKY_ALLOW_ANON=1
+ * to force an anonymous attempt anyway.
+ */
+export function isConfigured(env = {}) {
+  const { id, secret } = readCreds(env);
+  if (id && secret) return true;
+  return String(env.OPENSKY_ALLOW_ANON || '') === '1';
 }
 
 function readCreds(env) {

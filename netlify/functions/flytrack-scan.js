@@ -33,7 +33,7 @@ const CORS = {
   'Cache-Control': 'no-store',
 };
 
-const PER_PROVIDER_TIMEOUT_MS = 7000;
+const PER_PROVIDER_TIMEOUT_MS = 8000;
 
 /** Run a provider with its own timeout so one slow source can't hang the scan. */
 async function runProvider(mod, ctx) {
@@ -100,7 +100,7 @@ export const handler = async (event) => {
         status: 'skipped',
         httpStatus: null,
         count: 0,
-        reason: 'Not configured (no API key)',
+        reason: mod.meta.skipHint || 'Not configured (no API key)',
         lastSuccessAt: null,
       });
     } else {
