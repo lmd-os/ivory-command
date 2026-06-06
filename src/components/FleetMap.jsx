@@ -25,12 +25,12 @@ const MAP_STYLE = {
   ],
 };
 
-/* ── Top-view aircraft SVG (airborne — gold) ── */
-const svgAirborne = (heading = 0, size = 24) => `
+/* ── Top-view aircraft SVG (airborne) ── */
+const svgAirborne = (heading = 0, size = 24, color = '#c9a84c') => `
   <svg width="${size}" height="${size}" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"
        style="transform:rotate(${heading - 90}deg);display:block;">
     <path d="M16 3L13 11L3 17.5V20L13 16.5V24.5L10 26.5V28.5L16 27L22 28.5V26.5L19 24.5V16.5L29 20V17.5L19 11L16 3Z"
-      fill="#c9a84c" />
+      fill="${color}" />
   </svg>
 `;
 
@@ -47,18 +47,20 @@ const svgGround = (size = 20) => `
 function createAircraftEl(aircraft, live, onClick) {
   const onGround  = live?.onGround ?? false;
   const heading   = live?.heading  ?? 0;
+  const isDemo    = Boolean(live?.demo);
+  const airColor  = isDemo ? '#f0a030' : '#c9a84c';
 
   const el = document.createElement('div');
-  el.className = `ac-marker${onGround ? ' ac-marker--ground' : ''}`;
-  el.setAttribute('title', `${aircraft.registration} — ${aircraft.type}`);
+  el.className = `ac-marker${onGround ? ' ac-marker--ground' : ''}${isDemo ? ' ac-marker--demo' : ''}`;
+  el.setAttribute('title', `${aircraft.registration} — ${aircraft.type}${isDemo ? ' (DEMO)' : ''}`);
 
   el.innerHTML = `
     ${!onGround ? '<div class="ac-marker__pulse"></div>' : ''}
     <div class="ac-marker__ring"></div>
     <div class="ac-marker__icon">
-      ${onGround ? svgGround() : svgAirborne(heading)}
+      ${onGround ? svgGround() : svgAirborne(heading, 24, airColor)}
     </div>
-    <div class="ac-marker__label">${aircraft.registration}</div>
+    <div class="ac-marker__label">${aircraft.registration}${isDemo ? ' · DEMO' : ''}</div>
   `;
 
   el.addEventListener('click', (e) => { e.stopPropagation(); onClick(aircraft); });

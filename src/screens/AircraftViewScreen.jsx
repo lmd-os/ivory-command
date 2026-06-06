@@ -117,18 +117,21 @@ function AircraftCard({ aircraft, index, getLive }) {
 
       <div style={cardStyles.divider} />
 
-      {/* Live data or unavailable */}
+      {/* Live data or honest absence */}
       <div style={cardStyles.live}>
-        <div style={cardStyles.liveLabel}>LIVE POSITION</div>
-        {tracked && live.latitude != null ? (
+        <div style={cardStyles.liveLabel}>
+          LIVE POSITION
+          {live?.demo && <span style={cardStyles.demoTag}>DEMO</span>}
+        </div>
+        {tracked && live.lat != null ? (
           <div style={cardStyles.liveGrid}>
             <div style={cardStyles.liveItem}>
               <span style={cardStyles.liveKey}>LAT</span>
-              <span style={cardStyles.liveVal}>{Math.abs(live.latitude).toFixed(4)}° {live.latitude >= 0 ? 'N' : 'S'}</span>
+              <span style={cardStyles.liveVal}>{Math.abs(live.lat).toFixed(4)}° {live.lat >= 0 ? 'N' : 'S'}</span>
             </div>
             <div style={cardStyles.liveItem}>
               <span style={cardStyles.liveKey}>LON</span>
-              <span style={cardStyles.liveVal}>{Math.abs(live.longitude).toFixed(4)}° {live.longitude >= 0 ? 'E' : 'W'}</span>
+              <span style={cardStyles.liveVal}>{Math.abs(live.lon).toFixed(4)}° {live.lon >= 0 ? 'E' : 'W'}</span>
             </div>
             <div style={cardStyles.liveItem}>
               <span style={cardStyles.liveKey}>ALT</span>
@@ -140,7 +143,12 @@ function AircraftCard({ aircraft, index, getLive }) {
             </div>
           </div>
         ) : (
-          <div style={cardStyles.unavailable}>Unavailable</div>
+          <div style={cardStyles.notVisible}>
+            <span style={cardStyles.notVisibleTitle}>Not publicly visible now</span>
+            <span style={cardStyles.notVisibleHint}>
+              May be on ground, outside public ADS-B coverage, blocked, or not currently broadcasting.
+            </span>
+          </div>
         )}
       </div>
 
@@ -206,8 +214,8 @@ export function AircraftViewScreen({ getLive }) {
         >
           <div style={styles.noteIcon}>ℹ</div>
           <div style={styles.noteText}>
-            All fleet data sourced from public registries (ch-aviation, flightdb.net, aviapix.ru, ivoryjetservices.com).
-            Live positions via OpenSky Network — tracking subject to ADS-B broadcast availability.
+            All fleet data sourced from public registries (hexdb.io, ch-aviation, flightdb.net, ivoryjetservices.com).
+            Live positions via OpenSky Network &amp; ADS-B Exchange — tracking subject to public ADS-B broadcast availability.
             No data is invented or estimated.
           </div>
         </motion.div>
@@ -376,12 +384,36 @@ const cardStyles = {
     color: 'var(--c-green)',
     letterSpacing: '1px',
   },
-  unavailable: {
+  demoTag: {
     fontFamily: 'var(--f-mono)',
-    fontSize: 11,
-    color: 'var(--c-muted)',
+    fontSize: 7,
+    letterSpacing: '1.5px',
+    color: 'var(--c-amber)',
+    border: '1px solid rgba(240,160,48,0.4)',
+    borderRadius: 2,
+    padding: '1px 4px',
+    marginLeft: 8,
+  },
+  notVisible: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: 4,
+    padding: '10px 12px',
+    background: 'rgba(255,255,255,0.02)',
+    border: '1px solid var(--c-border)',
+    borderRadius: 2,
+  },
+  notVisibleTitle: {
+    fontFamily: 'var(--f-mono)',
+    fontSize: 10,
     letterSpacing: '1px',
-    fontStyle: 'italic',
+    color: 'var(--c-amber)',
+  },
+  notVisibleHint: {
+    fontFamily: 'var(--f-sans)',
+    fontSize: 10,
+    color: 'var(--c-muted)',
+    lineHeight: 1.5,
   },
   footer: {
     marginTop: 0,

@@ -7,7 +7,7 @@ import { AircraftViewScreen } from './screens/AircraftViewScreen';
 import { OperationsScreen }   from './screens/OperationsScreen';
 import { CommandScreen }      from './screens/CommandScreen';
 import { Navigation }         from './components/Navigation';
-import { useOpenSky }         from './hooks/useOpenSky';
+import { useFlyTrack }        from './hooks/useFlyTrack';
 
 export default function App() {
   const [phase,  setPhase]  = useState('intro');
@@ -15,13 +15,18 @@ export default function App() {
 
   const {
     getLive,
+    getRecord,
+    diagnostics,
+    mode,
     loading,
+    scanning,
     error,
-    lastUpdated,
+    lastScan,
+    runScan,
     detectedCount,
     airborneCount,
     groundCount,
-  } = useOpenSky();
+  } = useFlyTrack();
 
   const handleIntroComplete = useCallback(() => {
     setPhase('main');
@@ -41,9 +46,14 @@ export default function App() {
                 <LiveFleetScreen
                   key="fleet"
                   getLive={getLive}
+                  getRecord={getRecord}
+                  diagnostics={diagnostics}
+                  mode={mode}
                   loading={loading}
+                  scanning={scanning}
                   error={error}
-                  lastUpdated={lastUpdated}
+                  lastScan={lastScan}
+                  onRunScan={runScan}
                   detectedCount={detectedCount}
                 />
               )}

@@ -264,6 +264,18 @@ body {
   100% { box-shadow: 0 0 0 0 rgba(46, 204, 148, 0); }
 }
 
+/* Run-scan spinner */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* DEMO aircraft marker variant */
+.ac-marker--demo .ac-marker__icon { filter: drop-shadow(0 0 6px rgba(240, 160, 48, 0.85)); }
+.ac-marker--demo .ac-marker__ring { border-color: var(--c-amber); }
+.ac-marker--demo .ac-marker__pulse { border-color: var(--c-amber); }
+.ac-marker--demo .ac-marker__label { color: var(--c-amber); }
+
 /* ── Scrollbar (panels) ── */
 ::-webkit-scrollbar {
   width: 4px;

@@ -71,7 +71,7 @@ export const FLEET = [
     id: 'J2-HPV',
     registration: 'J2-HPV',
     callsign: 'J2HPV',
-    icao24: null,
+    icao24: '098014',
     manufacturer: 'Dassault',
     type: 'Falcon 7X',
     fullType: 'Dassault Falcon 7X',
@@ -93,7 +93,7 @@ export const FLEET = [
     medevac: false,
     vip: true,
     previousRegs: [],
-    publicSource: 'https://www.ch-aviation.com/news/145212-djiboutis-ivory-jet-services-opens-new-base-in-abidjan',
+    publicSource: 'https://hexdb.io/api/v1/aircraft/098014',
   },
 ];
 

@@ -5,6 +5,18 @@
 [build.environment]
   NODE_VERSION = "22"
 
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+# FlyTrack server-side proxy (bypasses CORS, injects API secrets)
+[[redirects]]
+  from = "/api/flytrack-scan"
+  to = "/.netlify/functions/flytrack-scan"
+  status = 200
+  force = true
+
+# SPA fallback
 [[redirects]]
   from = "/*"
   to = "/index.html"
