@@ -2,33 +2,35 @@ import { motion } from 'framer-motion';
 import { Clock } from './Clock';
 
 const NAV_ITEMS = [
-  { id: 'fleet',      label: 'Live Fleet' },
-  { id: 'aircraft',   label: 'Aircraft'   },
-  { id: 'operations', label: 'Operations' },
-  { id: 'command',    label: 'Command'    },
+  { id: 'fleet',      label: 'Live Fleet',  short: 'Fleet'  },
+  { id: 'aircraft',   label: 'Aircraft',    short: 'A/C'    },
+  { id: 'operations', label: 'Operations',  short: 'Ops'    },
+  { id: 'command',    label: 'Command',     short: 'Cmd'    },
 ];
 
 export function Navigation({ screen, onNavigate }) {
   return (
     <motion.nav
+      className="nav-root"
       style={styles.nav}
       initial={{ opacity: 0, y: -20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.8, ease: 'easeOut', delay: 0.3 }}
     >
       {/* Wordmark */}
-      <div style={styles.wordmark}>
+      <div className="nav-wordmark" style={styles.wordmark}>
         <span style={styles.ic}>IVORY</span>
         <span style={styles.separator} />
-        <span style={styles.cmd}>COMMAND</span>
+        <span className="nav-cmd" style={styles.cmd}>COMMAND</span>
       </div>
 
       {/* Nav links */}
-      <div style={styles.links}>
+      <div className="nav-links" style={styles.links}>
         {NAV_ITEMS.map((item) => (
           <NavItem
             key={item.id}
             label={item.label}
+            short={item.short}
             active={screen === item.id}
             onClick={() => onNavigate(item.id)}
           />
@@ -36,18 +38,21 @@ export function Navigation({ screen, onNavigate }) {
       </div>
 
       {/* Clock */}
-      <div style={styles.clockWrap}>
+      <div className="nav-clock" style={styles.clockWrap}>
         <Clock showDate utc />
       </div>
     </motion.nav>
   );
 }
 
-function NavItem({ label, active, onClick }) {
+function NavItem({ label, short, active, onClick }) {
   return (
     <button style={styles.navBtn} onClick={onClick} data-active={active}>
-      <span style={{ ...styles.navLabel, color: active ? 'var(--c-white)' : 'var(--c-subtle)' }}>
+      <span className="nav-label-full" style={{ ...styles.navLabel, color: active ? 'var(--c-white)' : 'var(--c-subtle)' }}>
         {label}
+      </span>
+      <span className="nav-label-short" style={{ ...styles.navLabelShort, color: active ? 'var(--c-white)' : 'var(--c-subtle)' }}>
+        {short}
       </span>
       {active && (
         <motion.div
@@ -132,6 +137,15 @@ const styles = {
     letterSpacing: '2px',
     textTransform: 'uppercase',
     transition: 'color 0.25s ease',
+  },
+  navLabelShort: {
+    fontFamily: 'var(--f-sans)',
+    fontWeight: 400,
+    fontSize: 10,
+    letterSpacing: '1.5px',
+    textTransform: 'uppercase',
+    transition: 'color 0.25s ease',
+    display: 'none',
   },
   indicator: {
     position: 'absolute',

@@ -1,28 +1,71 @@
 /**
  * useFlyTrack — React hook driving the FlyTrack engine.
  *
- * Exposes a stable API for the UI:
- *   getLive(icao24|id) → position|null     (null = not currently visible)
- *   diagnostics, mode, loading, scanning, error, lastScan
- *   detectedCount, airborneCount, groundCount
- *   runScan()  → manual "Run live scan" (no page reload)
+ * Status hierarchy (honest, never fabricated):
+ *   1. LIVE        — real-time ADS-B signal right now
+ *   2. LAST_SEEN   — last confirmed position from localStorage cache
+ *   3. BASE_VERIFIED — known operational base from fleet registry
+ *   4. NOT_VISIBLE — no data from any source
  *
- * Real mode polls every 45 s; demo mode animates every 2 s.
- * NEVER fabricates a position — absence is surfaced honestly.
+ * The localStorage cache is updated every time a live position is found.
+ * Nothing is fabricated. If no data is available, it says so.
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { FLEET } from '../data/fleet';
 import { runScan as engineScan } from '../services/flytrack/flyTrackEngine';
 import { FLYTRACK_CONFIG } from '../services/flytrack/config';
+import { getAircraftStatus } from '../services/flytrack/statusEnrich';
+
+// ── localStorage cache ──────────────────────────────────────────────────────
+const CACHE_KEY = 'flytrack_lastSeen_v3';
+
+function loadCache() {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveCache(cache) {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify(cache));
+  } catch { /* quota exceeded or private mode */ }
+}
+
+/** Update the cache with any live positions found in the latest scan. */
+function buildUpdatedCache(results, prevCache) {
+  const updated = { ...prevCache };
+  for (const [id, record] of Object.entries(results)) {
+    if (record.found && record.lat != null && record.lon != null) {
+      updated[id] = {
+        lat:          record.lat,
+        lon:          record.lon,
+        baroAlt_ft:   record.baroAlt_ft   ?? null,
+        velocity_kts: record.velocity_kts  ?? null,
+        heading:      record.heading       ?? null,
+        callsign:     record.callsign      ?? null,
+        source:       record.source || 'ADS-B public network',
+        seenAt:       new Date().toISOString(),
+        seenAtUnix:   Math.round(Date.now() / 1000),
+      };
+    }
+  }
+  return updated;
+}
+
+// ── Hook ────────────────────────────────────────────────────────────────────
 
 export function useFlyTrack() {
-  const [results, setResults]         = useState({});
-  const [diagnostics, setDiagnostics] = useState([]);
-  const [loading, setLoading]         = useState(true);   // first load
-  const [scanning, setScanning]       = useState(false);  // any scan in flight
-  const [error, setError]             = useState(null);
-  const [lastScan, setLastScan]       = useState(null);
-  const [mode, setMode]               = useState(FLYTRACK_CONFIG.mode);
+  const [results, setResults]             = useState({});
+  const [diagnostics, setDiagnostics]     = useState([]);
+  const [loading, setLoading]             = useState(true);
+  const [scanning, setScanning]           = useState(false);
+  const [error, setError]                 = useState(null);
+  const [lastScan, setLastScan]           = useState(null);
+  const [mode, setMode]                   = useState(FLYTRACK_CONFIG.mode);
+  const [cachedPositions, setCachedPositions] = useState(() => loadCache());
 
   const abortRef = useRef(null);
   const idToIcao = useRef(
@@ -35,11 +78,19 @@ export function useFlyTrack() {
     setScanning(true);
     try {
       const data = await engineScan(FLEET, { signal: abortRef.current.signal });
-      setResults(data.results || {});
+      const newResults = data.results || {};
+      setResults(newResults);
       setDiagnostics(data.diagnostics || []);
       setMode(data.mode);
       setLastScan(new Date());
       setError(data.ok ? null : 'tracking_degraded');
+
+      // Update localStorage cache with any newly found positions
+      setCachedPositions((prev) => {
+        const updated = buildUpdatedCache(newResults, prev);
+        saveCache(updated);
+        return updated;
+      });
     } catch (e) {
       if (e.name !== 'AbortError') setError('scan_failed');
     } finally {
@@ -60,13 +111,11 @@ export function useFlyTrack() {
     };
   }, [doScan]);
 
-  /** Look up by aircraft id OR icao24; returns position if found, else null. */
+  /** Look up by aircraft id OR icao24 — live position or null. */
   const getLive = useCallback((key) => {
     if (!key) return null;
-    // direct id hit
     if (results[key]?.found) return results[key];
-    if (results[key]) return null; // present but not found
-    // fall back to icao24 → id resolution
+    if (results[key]) return null;
     const lower = String(key).toLowerCase();
     const entry = Object.entries(idToIcao.current).find(([, hex]) => hex === lower);
     if (entry) {
@@ -85,9 +134,20 @@ export function useFlyTrack() {
     return entry ? results[entry[0]] : null;
   }, [results]);
 
-  const found = Object.values(results).filter((r) => r.found);
-  const detectedCount = found.length;
-  const airborneCount = found.filter((r) => !r.onGround).length;
+  /**
+   * Full enriched status for one aircraft (by aircraft.id).
+   * Returns: { status, label, subLabel, confidence, lat, lon, ... }
+   * Status levels: LIVE | LAST_SEEN | BASE_VERIFIED | NOT_VISIBLE
+   */
+  const getStatus = useCallback((aircraftId) => {
+    const liveRecord    = results[aircraftId] ?? null;
+    const fleetAircraft = FLEET.find((a) => a.id === aircraftId) ?? null;
+    return getAircraftStatus(aircraftId, liveRecord, cachedPositions, fleetAircraft);
+  }, [results, cachedPositions]);
+
+  const found          = Object.values(results).filter((r) => r.found);
+  const detectedCount  = found.length;
+  const airborneCount  = found.filter((r) => !r.onGround).length;
   const groundCount    = found.filter((r) => r.onGround).length;
 
   return {
@@ -100,9 +160,11 @@ export function useFlyTrack() {
     lastScan,
     getLive,
     getRecord,
+    getStatus,
     runScan: doScan,
     detectedCount,
     airborneCount,
     groundCount,
+    cachedPositions,
   };
 }

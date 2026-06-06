@@ -3,8 +3,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { FleetMap } from '../components/FleetMap';
 import { AircraftPanel } from '../components/AircraftPanel';
 import { FLEET } from '../data/fleet';
+import { TRACK_STATUS } from '../services/flytrack/statusEnrich';
 
-const STATUS_COLOR = {
+const DIAG_COLOR = {
   ok: 'var(--c-green)',
   no_data: 'var(--c-amber)',
   skipped: 'var(--c-muted)',
@@ -14,20 +15,44 @@ const STATUS_COLOR = {
   unauthorized: 'var(--c-amber)',
   unreachable: 'var(--c-red)',
 };
-
-const STATUS_LABEL = {
-  ok: 'OK',
-  no_data: 'NO DATA',
-  skipped: 'SKIPPED',
-  error: 'ERROR',
-  timeout: 'TIMEOUT',
-  rate_limited: 'RATE LIMIT',
-  unauthorized: 'NO AUTH',
-  unreachable: 'UNREACHABLE',
+const DIAG_LABEL = {
+  ok: 'OK', no_data: 'NO DATA', skipped: 'SKIPPED',
+  error: 'ERROR', timeout: 'TIMEOUT', rate_limited: 'RATE LIMIT',
+  unauthorized: 'NO AUTH', unreachable: 'UNREACHABLE',
 };
 
+/** Per-status colors for the aircraft list dot + state label. */
+function statusStyle(s) {
+  if (!s) return { dot: 'var(--c-muted)', text: 'var(--c-muted)' };
+  switch (s.status) {
+    case TRACK_STATUS.LIVE:
+      return {
+        dot:  s.label === 'AIRBORNE' ? 'var(--c-green)' : 'var(--c-amber)',
+        text: s.label === 'AIRBORNE' ? 'var(--c-green)' : 'var(--c-amber)',
+        glow: s.label === 'AIRBORNE' ? '0 0 6px var(--c-green)' : 'none',
+      };
+    case TRACK_STATUS.LAST_SEEN:
+      return { dot: 'var(--c-blue)', text: 'var(--c-subtle)', glow: 'none' };
+    case TRACK_STATUS.BASE_VERIFIED:
+      return { dot: '#7a6b3f', text: '#7a6b3f', glow: 'none' };
+    default:
+      return { dot: 'var(--c-muted)', text: 'var(--c-muted)', glow: 'none' };
+  }
+}
+
+/** Short label for the aircraft list row (max ~12 chars). */
+function statusShortLabel(s) {
+  if (!s) return 'NO SIGNAL';
+  switch (s.status) {
+    case TRACK_STATUS.LIVE:         return s.label; // AIRBORNE / ON GROUND
+    case TRACK_STATUS.LAST_SEEN:    return s.ageLabel ? `SEEN ${s.ageLabel}` : 'LAST SEEN';
+    case TRACK_STATUS.BASE_VERIFIED: return 'BASE';
+    default:                         return 'NO SIGNAL';
+  }
+}
+
 export function LiveFleetScreen({
-  getLive, getRecord, diagnostics = [], mode = 'real',
+  getLive, getRecord, getStatus, diagnostics = [], mode = 'real',
   loading, scanning, error, lastScan, onRunScan, detectedCount,
 }) {
   const [selected, setSelected]   = useState(null);
@@ -38,7 +63,6 @@ export function LiveFleetScreen({
     setSelected(aircraft);
     setPanelOpen(true);
   }, []);
-
   const handleClosePanel = useCallback(() => {
     setPanelOpen(false);
     setTimeout(() => setSelected(null), 450);
@@ -51,10 +75,25 @@ export function LiveFleetScreen({
   const detected = detectedCount ?? 0;
   const airborne = FLEET.filter((a) => { const l = getLive(a.icao24 || a.id); return l && !l.onGround; }).length;
   const isDemo   = mode === 'demo';
-  const showPremium = !loading && !isDemo && detected === 0;
+
+  // Count aircraft with at least some data (LIVE or LAST_SEEN or BASE_VERIFIED)
+  const monitoredCount = getStatus
+    ? FLEET.filter((a) => getStatus(a.id).status !== TRACK_STATUS.NOT_VISIBLE).length
+    : FLEET.length;
+
+  // Show premium overlay only when zero live signals AND no last-seen cache for any aircraft
+  const anyPositionKnown = getStatus
+    ? FLEET.some((a) => {
+        const s = getStatus(a.id);
+        return s.status === TRACK_STATUS.LIVE || s.status === TRACK_STATUS.LAST_SEEN;
+      })
+    : false;
+
+  const showPremium = !loading && !isDemo && detected === 0 && !anyPositionKnown;
 
   return (
     <motion.div
+      className="lf-screen"
       style={styles.screen}
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       transition={{ duration: 0.5 }}
@@ -69,18 +108,51 @@ export function LiveFleetScreen({
         </div>
       )}
 
-      {/* ── HUD top-left : LIVE NOW ── */}
+      {/* ── HUD top-left : LIVE NOW + fleet intelligence ── */}
       <div className="hud-tl" style={styles.hudTL}>
         <div style={styles.hudHeader}>
-          <div style={{ ...styles.liveDot, background: isDemo ? 'var(--c-amber)' : 'var(--c-green)', boxShadow: `0 0 8px ${isDemo ? 'var(--c-amber)' : 'var(--c-green)'}` }} />
+          <div style={{
+            ...styles.liveDot,
+            background: isDemo ? 'var(--c-amber)' : 'var(--c-green)',
+            boxShadow: `0 0 8px ${isDemo ? 'var(--c-amber)' : 'var(--c-green)'}`,
+          }} />
           <span style={styles.liveLabel}>{isDemo ? 'DEMO NOW' : 'LIVE NOW'}</span>
           <span style={styles.modeBadge}>{isDemo ? 'DEMO' : 'REAL'}</span>
         </div>
 
+        {/* Fleet Intelligence status lines */}
+        <div className="intel-status" style={styles.intelStatus}>
+          <div style={styles.intelRow}>
+            <span style={styles.intelDot}>◈</span>
+            <span className="intel-status-text" style={styles.intelText}>Fleet Intelligence active</span>
+          </div>
+          <div style={styles.intelRow}>
+            <span style={styles.intelDot}>◈</span>
+            <span className="intel-status-text" style={styles.intelText}>{FLEET.length} aircraft monitored</span>
+          </div>
+          <div style={styles.intelRow}>
+            <span style={styles.intelDot}>◈</span>
+            <span className="intel-status-text" style={styles.intelText}>
+              {loading ? 'Live scan in progress…' : 'Live scan complete'}
+            </span>
+          </div>
+          <div style={styles.intelRow}>
+            <span style={styles.intelDot}>◈</span>
+            <span className="intel-status-text" style={styles.intelText}>Last known positions searched</span>
+          </div>
+          <div style={styles.intelRow}>
+            <span style={styles.intelDot}>◈</span>
+            <span className="intel-status-text" style={styles.intelText}>Operational bases displayed</span>
+          </div>
+        </div>
+
+        <div style={styles.hudDivider} />
+
+        {/* Counters */}
         <div style={styles.counterRow}>
           <div style={styles.counter}>
             <span style={{ ...styles.counterVal, color: detected > 0 ? 'var(--c-gold)' : 'var(--c-muted)' }}>{detected}</span>
-            <span style={styles.counterLabel}>DETECTED</span>
+            <span style={styles.counterLabel}>LIVE</span>
           </div>
           <div style={styles.counterDivider} />
           <div style={styles.counter}>
@@ -97,27 +169,27 @@ export function LiveFleetScreen({
         {/* Aircraft list */}
         <div style={styles.acList}>
           {FLEET.map((aircraft) => {
-            const live    = getLive(aircraft.icao24 || aircraft.id);
-            const tracked = live != null;
-            const acAirborne = tracked && !live.onGround;
+            const s = getStatus ? getStatus(aircraft.id) : null;
+            const ss = statusStyle(s);
             return (
-              <button key={aircraft.id} className="ac-item" style={styles.acItem}
+              <button
+                key={aircraft.id}
+                className="ac-item"
+                style={styles.acItem}
                 onClick={() => handleAircraftClick(aircraft)}
-                title={`${aircraft.registration} — ${aircraft.fullType}`}>
+                title={`${aircraft.registration} — ${aircraft.fullType}`}
+              >
                 <div style={{
                   ...styles.acDot,
-                  background: acAirborne ? 'var(--c-green)' : tracked ? 'var(--c-amber)' : 'var(--c-muted)',
-                  boxShadow: acAirborne ? '0 0 6px var(--c-green)' : 'none',
+                  background: ss.dot,
+                  boxShadow: ss.glow || 'none',
                 }} />
                 <div style={styles.acInfo}>
                   <span style={styles.acReg}>{aircraft.registration}</span>
                   <span style={styles.acType}>{aircraft.type}</span>
                 </div>
-                <div style={{
-                  ...styles.acState,
-                  color: acAirborne ? 'var(--c-green)' : tracked ? 'var(--c-amber)' : 'var(--c-muted)',
-                }}>
-                  {acAirborne ? 'AIRBORNE' : tracked ? 'GROUND' : 'NO SIGNAL'}
+                <div style={{ ...styles.acState, color: ss.text }}>
+                  {statusShortLabel(s)}
                 </div>
               </button>
             );
@@ -125,8 +197,11 @@ export function LiveFleetScreen({
         </div>
 
         {/* Run live scan */}
-        <button style={{ ...styles.scanBtn, opacity: scanning ? 0.6 : 1, cursor: scanning ? 'default' : 'pointer' }}
-          onClick={() => !scanning && onRunScan?.()} disabled={scanning}>
+        <button
+          style={{ ...styles.scanBtn, opacity: scanning ? 0.6 : 1, cursor: scanning ? 'default' : 'pointer' }}
+          onClick={() => !scanning && onRunScan?.()}
+          disabled={scanning}
+        >
           <span style={{ ...styles.scanSpinner, animation: scanning ? 'spin 0.9s linear infinite' : 'none' }}>
             {scanning ? '◠' : '⟳'}
           </span>
@@ -135,7 +210,7 @@ export function LiveFleetScreen({
       </div>
 
       {/* ── HUD bottom-left : status + diagnostics toggle ── */}
-      <div style={styles.hudBL}>
+      <div className="hud-bl" style={styles.hudBL}>
         <div style={styles.blRow}>
           <span style={styles.blLabel}>LAST UPDATE</span>
           <span style={{ ...styles.blValue, color: lastUpdate ? 'var(--c-subtle)' : 'var(--c-muted)' }}>
@@ -151,10 +226,11 @@ export function LiveFleetScreen({
         </button>
       </div>
 
-      {/* ── Diagnostic panel (discreet, bottom-right) ── */}
+      {/* ── Diagnostic panel ── */}
       <AnimatePresence>
         {diagOpen && (
           <motion.div
+            className="diag-panel"
             style={styles.diagPanel}
             initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 16 }}
             transition={{ duration: 0.25 }}
@@ -170,12 +246,12 @@ export function LiveFleetScreen({
               {diagnostics.map((d) => (
                 <div key={d.provider} style={styles.diagRow}>
                   <div style={styles.diagSource}>
-                    <span style={{ ...styles.diagStatusDot, background: STATUS_COLOR[d.status] || 'var(--c-muted)' }} />
+                    <span style={{ ...styles.diagStatusDot, background: DIAG_COLOR[d.status] || 'var(--c-muted)' }} />
                     <span style={styles.diagLabel}>{d.label}</span>
                   </div>
                   <div style={styles.diagMeta}>
-                    <span style={{ ...styles.diagStatus, color: STATUS_COLOR[d.status] || 'var(--c-muted)' }}>
-                      {STATUS_LABEL[d.status] || (d.status || '').toUpperCase()}
+                    <span style={{ ...styles.diagStatus, color: DIAG_COLOR[d.status] || 'var(--c-muted)' }}>
+                      {DIAG_LABEL[d.status] || (d.status || '').toUpperCase()}
                     </span>
                     <span style={styles.diagCount}>{d.count ?? 0} fix</span>
                   </div>
@@ -187,10 +263,11 @@ export function LiveFleetScreen({
         )}
       </AnimatePresence>
 
-      {/* ── Premium overlay when nothing is publicly visible ── */}
+      {/* ── Premium overlay — when no live signal AND no cached position ── */}
       <AnimatePresence>
         {showPremium && (
           <motion.div
+            className="premium-overlay"
             style={styles.premium}
             initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
             transition={{ duration: 0.5 }}
@@ -199,9 +276,10 @@ export function LiveFleetScreen({
               <div style={styles.premiumEyebrow}>FLEET INTELLIGENCE · LIVE SCAN COMPLETE</div>
               <div style={styles.premiumTitle}>No public ADS-B signal right now</div>
               <div style={styles.premiumText}>
-                The system scanned {diagnostics.length} tracking sources in real time.
+                The system scanned {diagnostics.length || 'all'} tracking sources in real time.
                 These private jets are not currently broadcasting on public networks —
                 they may be on the ground, outside ADS-B coverage, or blocked from public tracking.
+                Operational bases are displayed on the map.
               </div>
               <div style={styles.premiumDivider} />
               <div style={styles.premiumCta}>
@@ -217,11 +295,12 @@ export function LiveFleetScreen({
         <AircraftPanel
           aircraft={selected}
           record={getRecord ? getRecord(selected.icao24 || selected.id) : null}
+          statusInfo={getStatus ? getStatus(selected.id) : null}
           onClose={handleClosePanel}
         />
       )}
 
-      <div style={styles.attribution}>© OpenStreetMap contributors, © CARTO</div>
+      <div className="map-attribution" style={styles.attribution}>© OpenStreetMap contributors, © CARTO</div>
     </motion.div>
   );
 }
@@ -243,14 +322,26 @@ const styles = {
     background: 'rgba(0,0,0,0.82)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
     border: '1px solid var(--c-border)', borderRadius: 3, padding: '14px 16px 12px',
     minWidth: 234, maxWidth: 272,
+    maxHeight: 'calc(100vh - 130px)', overflowY: 'auto',
   },
-  hudHeader: { display: 'flex', alignItems: 'center', gap: 7, marginBottom: 10 },
+  hudHeader: { display: 'flex', alignItems: 'center', gap: 7, marginBottom: 8 },
   liveDot: { width: 5, height: 5, borderRadius: '50%', animation: 'pulse-ring 2s infinite', flexShrink: 0 },
   liveLabel: { fontFamily: 'var(--f-mono)', fontSize: 9, letterSpacing: '3px', color: 'var(--c-gold)', fontWeight: 500, flex: 1 },
   modeBadge: {
     fontFamily: 'var(--f-mono)', fontSize: 7, letterSpacing: '1.5px', color: 'var(--c-subtle)',
     border: '1px solid var(--c-border)', borderRadius: 2, padding: '1px 5px',
   },
+
+  intelStatus: {
+    display: 'flex', flexDirection: 'column', gap: 3, marginBottom: 10,
+    padding: '8px 10px',
+    background: 'rgba(255,255,255,0.02)', border: '1px solid var(--c-border)', borderRadius: 2,
+  },
+  intelRow: { display: 'flex', alignItems: 'center', gap: 6 },
+  intelDot: { fontFamily: 'var(--f-mono)', fontSize: 7, color: 'var(--c-gold)', flexShrink: 0 },
+  intelText: { fontFamily: 'var(--f-mono)', fontSize: 8, letterSpacing: '0.3px', color: 'var(--c-soft)' },
+
+  hudDivider: { height: 1, background: 'var(--c-border)', margin: '0 0 10px' },
 
   counterRow: {
     display: 'flex', alignItems: 'center', marginBottom: 12,
@@ -317,15 +408,20 @@ const styles = {
   diagReason: { fontFamily: 'var(--f-sans)', fontSize: 9, color: 'var(--c-muted)', paddingLeft: 12, lineHeight: 1.4 },
 
   premium: {
-    position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
-    zIndex: 40, width: 'min(440px, calc(100vw - 48px))', pointerEvents: 'none',
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    transform: 'translate(-50%, -50%)',
+    zIndex: 40,
+    width: 'min(440px, 90vw)',
+    pointerEvents: 'none',
   },
   premiumInner: {
     background: 'rgba(0,0,0,0.78)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
-    border: '1px solid var(--c-border)', borderRadius: 4, padding: '28px 28px 24px', textAlign: 'center',
+    border: '1px solid var(--c-border)', borderRadius: 4, padding: '28px 24px 24px', textAlign: 'center',
   },
   premiumEyebrow: { fontFamily: 'var(--f-mono)', fontSize: 8.5, letterSpacing: '3px', color: 'var(--c-gold)', marginBottom: 14 },
-  premiumTitle: { fontFamily: 'var(--f-sans)', fontWeight: 200, fontSize: 22, letterSpacing: '1px', color: 'var(--c-white)', marginBottom: 12 },
+  premiumTitle: { fontFamily: 'var(--f-sans)', fontWeight: 200, fontSize: 20, letterSpacing: '1px', color: 'var(--c-white)', marginBottom: 12 },
   premiumText: { fontFamily: 'var(--f-sans)', fontSize: 12, color: 'var(--c-soft)', lineHeight: 1.7 },
   premiumDivider: { height: 1, width: 40, background: 'var(--c-gold-dim)', margin: '18px auto' },
   premiumCta: { fontFamily: 'var(--f-mono)', fontSize: 10, letterSpacing: '1px', color: 'var(--c-silver)', lineHeight: 1.6 },

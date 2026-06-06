@@ -379,43 +379,183 @@ body {
   margin-bottom: 40px;
 }
 
-/* Panel responsive */
-@media (max-width: 480px) {
+/* ════════════════════════════════════════════════════════════════
+   RESPONSIVE MOBILE — Breakpoints: 640px / 480px / 390px / 360px
+   ════════════════════════════════════════════════════════════════ */
+
+/* ── Mobile < 640px ──────────────────────────────────────────── */
+@media (max-width: 640px) {
+
+  /* -- Navigation -- */
+  .nav-root {
+    padding: 0 10px !important;
+    height: 48px !important;
+  }
+
+  /* Hide "COMMAND" label beside "IVORY" wordmark */
+  .nav-cmd {
+    display: none !important;
+  }
+
+  /* Center links: remove absolute centering, use flex */
+  .nav-links {
+    position: relative !important;
+    left: auto !important;
+    transform: none !important;
+    gap: 0 !important;
+  }
+
+  /* Compact nav buttons */
+  .nav-links button {
+    padding: 6px 8px !important;
+  }
+
+  /* Mobile: show short labels, hide full labels */
+  .nav-label-full {
+    display: none !important;
+  }
+  .nav-label-short {
+    display: block !important;
+  }
+
+  /* Hide the clock completely on mobile */
+  .nav-clock {
+    display: none !important;
+  }
+
+  /* -- Main screens: adjust top padding for 48px nav -- */
+  .lf-screen {
+    padding-top: 48px !important;
+  }
+
+  /* -- HUD top-left: compact floating panel -- */
+  .hud-tl {
+    top: 56px !important;
+    left: 8px !important;
+    min-width: auto !important;
+    max-width: min(264px, calc(100vw - 16px)) !important;
+    padding: 10px 12px 8px !important;
+    max-height: calc(100vh - 96px) !important;
+    font-size: 90% !important;
+  }
+
+  /* Reduce counter numbers on small HUD */
+  .hud-tl .counter-val {
+    font-size: 15px !important;
+  }
+
+  /* -- HUD bottom-left: hidden on mobile (takes too much space) -- */
+  .hud-bl {
+    display: none !important;
+  }
+
+  /* -- Diagnostic panel: hidden on mobile -- */
+  .diag-panel {
+    display: none !important;
+  }
+
+  /* -- Premium overlay: properly centered with safe width -- */
+  .premium-overlay {
+    width: min(90vw, 440px) !important;
+    left: 50% !important;
+    right: auto !important;
+    transform: translate(-50%, -50%) !important;
+    pointer-events: none !important;
+  }
+
+  /* -- Map attribution: smaller and not overlapping -- */
+  .map-attribution {
+    font-size: 7px !important;
+    bottom: 2px !important;
+    right: 2px !important;
+  }
+
+  /* -- Aircraft panel: bottom sheet (JS also handles this) --
+     These CSS overrides are a fallback / ensure consistency. */
   .ac-panel {
     width: 100vw !important;
+    top: auto !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    height: 75vh !important;
+    max-height: 75vh !important;
+    border-left: none !important;
+    border-top: 1px solid var(--c-border) !important;
+    border-radius: 12px 12px 0 0 !important;
   }
-}
 
-/* HUD panel responsive */
-@media (max-width: 480px) {
-  .hud-tl {
-    max-width: calc(100vw - 32px) !important;
-  }
-}
-
-/* Command screen features grid */
-@media (max-width: 640px) {
+  /* -- Command / aircraft card screens -- */
   .cmd-features-grid {
     grid-template-columns: 1fr !important;
   }
-}
 
-/* Ops fleet table mobile */
-@media (max-width: 640px) {
   .ops-fleet-table-header span:nth-child(n+4),
   .ops-fleet-table-row span:nth-child(n+4) {
     display: none;
   }
+
+  /* -- Aircraft cards grid: single column -- */
+  .aircraft-cards-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  /* -- Touch targets -- */
+  .ac-item {
+    padding: 10px 8px !important;
+    min-height: 44px !important;
+  }
 }
 
-/* Touch target improvement */
+/* ── Mobile < 480px (iPhone SE, older Android) ───────────────── */
+@media (max-width: 480px) {
+  .nav-root {
+    padding: 0 8px !important;
+  }
+
+  .hud-tl {
+    max-width: min(248px, calc(100vw - 12px)) !important;
+    left: 6px !important;
+    padding: 8px 10px 6px !important;
+  }
+
+  /* Abbreviate intel-status lines at very small width */
+  .hud-tl .intel-status-text {
+    font-size: 7px !important;
+  }
+}
+
+/* ── Narrow mobile < 390px (360px Android) ───────────────────── */
+@media (max-width: 390px) {
+  .hud-tl {
+    max-width: calc(100vw - 12px) !important;
+    left: 6px !important;
+    top: 54px !important;
+    padding: 8px 9px 6px !important;
+  }
+
+  .nav-links button {
+    padding: 6px 6px !important;
+  }
+
+  /* Registration text: slightly smaller */
+  .ac-item .ac-reg {
+    font-size: 11px !important;
+  }
+}
+
+/* ── Hover: touch devices -- improve tap targets ─────────────── */
 @media (hover: none) {
   .ac-item {
     padding: 10px 8px !important;
   }
+
+  button, [role="button"] {
+    min-height: 36px !important;
+  }
 }
 
-/* Prevent text selection on interactive elements */
+/* ── Prevent text selection on interactive elements ──────────── */
 button, [role="button"] {
   user-select: none;
   -webkit-user-select: none;

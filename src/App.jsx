@@ -16,6 +16,7 @@ export default function App() {
   const {
     getLive,
     getRecord,
+    getStatus,
     diagnostics,
     mode,
     loading,
@@ -47,6 +48,7 @@ export default function App() {
                   key="fleet"
                   getLive={getLive}
                   getRecord={getRecord}
+                  getStatus={getStatus}
                   diagnostics={diagnostics}
                   mode={mode}
                   loading={loading}
