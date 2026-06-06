@@ -270,11 +270,39 @@ body {
   to   { transform: rotate(360deg); }
 }
 
-/* DEMO aircraft marker variant */
+/* DEMO aircraft marker */
 .ac-marker--demo .ac-marker__icon { filter: drop-shadow(0 0 6px rgba(240, 160, 48, 0.85)); }
 .ac-marker--demo .ac-marker__ring { border-color: var(--c-amber); }
 .ac-marker--demo .ac-marker__pulse { border-color: var(--c-amber); }
 .ac-marker--demo .ac-marker__label { color: var(--c-amber); }
+
+/* LAST SEEN marker — amber, semi-transparent (no pulse) */
+.ac-marker--last-seen .ac-marker__ring {
+  border-color: rgba(240, 160, 48, 0.55);
+  width: 30px; height: 30px;
+}
+.ac-marker--last-seen .ac-marker__icon {
+  filter: drop-shadow(0 0 5px rgba(240, 160, 48, 0.5));
+  opacity: 0.88;
+}
+.ac-marker--last-seen .ac-marker__label {
+  color: var(--c-amber);
+  opacity: 0.85;
+}
+
+/* BASE VERIFIED marker — blue dot (no pulse, small) */
+.ac-marker--base .ac-marker__ring {
+  border-color: rgba(74, 144, 217, 0.4);
+  width: 26px; height: 26px;
+}
+.ac-marker--base .ac-marker__icon {
+  opacity: 0.7;
+}
+.ac-marker--base .ac-marker__label {
+  color: var(--c-blue);
+  opacity: 0.75;
+  font-size: 8px;
+}
 
 /* ── Scrollbar (panels) ── */
 ::-webkit-scrollbar {
@@ -544,7 +572,35 @@ body {
   }
 }
 
-/* ── Hover: touch devices -- improve tap targets ─────────────── */
+/* ── Fleet Intelligence Report — mobile responsive ───────────── */
+@media (max-width: 640px) {
+  .intel-report {
+    width: min(96vw, 680px) !important;
+    left: 50% !important;
+    top: 54% !important;
+    transform: translate(-50%, -50%) !important;
+    max-height: calc(100vh - 80px) !important;
+  }
+
+  /* Cards: 3 col → 1 col on small mobile */
+  .intel-cards {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .intel-report {
+    top: 56% !important;
+  }
+
+  /* Further reduce padding in report inner */
+  .intel-report > div {
+    padding: 16px 14px 14px !important;
+  }
+}
+
+/* ── Hover: touch devices ────────────────────────────────────── */
 @media (hover: none) {
   .ac-item {
     padding: 10px 8px !important;

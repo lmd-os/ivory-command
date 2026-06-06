@@ -57,6 +57,7 @@ export default function App() {
                   lastScan={lastScan}
                   onRunScan={runScan}
                   detectedCount={detectedCount}
+                  onNavigate={setScreen}
                 />
               )}
               {screen === 'aircraft' && (

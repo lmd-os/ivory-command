@@ -5,25 +5,20 @@ import { AircraftPanel } from '../components/AircraftPanel';
 import { FLEET } from '../data/fleet';
 import { TRACK_STATUS } from '../services/flytrack/statusEnrich';
 
+// ── Diagnostic color map ──────────────────────────────────────────────────────
 const DIAG_COLOR = {
-  ok: 'var(--c-green)',
-  no_data: 'var(--c-amber)',
-  skipped: 'var(--c-muted)',
-  error: 'var(--c-red)',
-  timeout: 'var(--c-red)',
-  rate_limited: 'var(--c-amber)',
-  unauthorized: 'var(--c-amber)',
-  unreachable: 'var(--c-red)',
+  ok: 'var(--c-green)', no_data: 'var(--c-amber)', skipped: 'var(--c-muted)',
+  error: 'var(--c-red)', timeout: 'var(--c-red)', rate_limited: 'var(--c-amber)',
+  unauthorized: 'var(--c-amber)', unreachable: 'var(--c-red)',
 };
 const DIAG_LABEL = {
-  ok: 'OK', no_data: 'NO DATA', skipped: 'SKIPPED',
-  error: 'ERROR', timeout: 'TIMEOUT', rate_limited: 'RATE LIMIT',
-  unauthorized: 'NO AUTH', unreachable: 'UNREACHABLE',
+  ok: 'OK', no_data: 'NO DATA', skipped: 'SKIPPED', error: 'ERROR',
+  timeout: 'TIMEOUT', rate_limited: 'RATE LIMIT', unauthorized: 'NO AUTH', unreachable: 'UNREACHABLE',
 };
 
-/** Per-status colors for the aircraft list dot + state label. */
-function statusStyle(s) {
-  if (!s) return { dot: 'var(--c-muted)', text: 'var(--c-muted)' };
+// ── Status helpers ────────────────────────────────────────────────────────────
+function statusDotStyle(s) {
+  if (!s) return { dot: 'var(--c-muted)', text: 'var(--c-muted)', glow: 'none' };
   switch (s.status) {
     case TRACK_STATUS.LIVE:
       return {
@@ -32,32 +27,153 @@ function statusStyle(s) {
         glow: s.label === 'AIRBORNE' ? '0 0 6px var(--c-green)' : 'none',
       };
     case TRACK_STATUS.LAST_SEEN:
-      return { dot: 'var(--c-blue)', text: 'var(--c-subtle)', glow: 'none' };
+      return { dot: 'var(--c-amber)', text: 'var(--c-amber)', glow: 'none' };
     case TRACK_STATUS.BASE_VERIFIED:
-      return { dot: '#7a6b3f', text: '#7a6b3f', glow: 'none' };
+      return { dot: 'var(--c-blue)', text: 'var(--c-blue)', glow: 'none' };
     default:
-      return { dot: 'var(--c-muted)', text: 'var(--c-muted)', glow: 'none' };
+      return { dot: '#3a3a3a', text: 'var(--c-muted)', glow: 'none' };
   }
 }
 
-/** Short label for the aircraft list row (max ~12 chars). */
 function statusShortLabel(s) {
   if (!s) return 'NO SIGNAL';
   switch (s.status) {
-    case TRACK_STATUS.LIVE:         return s.label; // AIRBORNE / ON GROUND
-    case TRACK_STATUS.LAST_SEEN:    return s.ageLabel ? `SEEN ${s.ageLabel}` : 'LAST SEEN';
+    case TRACK_STATUS.LIVE:          return s.label;
+    case TRACK_STATUS.LAST_SEEN:     return s.ageLabel ? `SEEN ${s.ageLabel}` : 'LAST SEEN';
     case TRACK_STATUS.BASE_VERIFIED: return 'BASE';
-    default:                         return 'NO SIGNAL';
+    default:                          return 'PRIVATE';
   }
 }
 
+// ── Status color for cards ────────────────────────────────────────────────────
+const STATUS_COLOR = {
+  [TRACK_STATUS.LIVE]:          'var(--c-green)',
+  [TRACK_STATUS.LAST_SEEN]:     'var(--c-amber)',
+  [TRACK_STATUS.BASE_VERIFIED]: 'var(--c-blue)',
+  [TRACK_STATUS.NOT_VISIBLE]:   'var(--c-muted)',
+};
+const STATUS_ICON = {
+  [TRACK_STATUS.LIVE]:          '●',
+  [TRACK_STATUS.LAST_SEEN]:     '◌',
+  [TRACK_STATUS.BASE_VERIFIED]: '◎',
+  [TRACK_STATUS.NOT_VISIBLE]:   '○',
+};
+
+// ── Per-aircraft summary card (inside Fleet Intelligence Report) ───────────────
+function AircraftIntelCard({ aircraft, status, onClick }) {
+  const color = STATUS_COLOR[status?.status] || 'var(--c-muted)';
+  const icon  = STATUS_ICON[status?.status] || '○';
+  const hasPosition = status?.lat != null && status?.lon != null;
+  const isBase = status?.status === TRACK_STATUS.BASE_VERIFIED;
+
+  return (
+    <button style={cStyles.card} onClick={() => onClick(aircraft)}>
+      {/* Header */}
+      <div style={cStyles.cardHeader}>
+        <div>
+          <div style={cStyles.cardReg}>{aircraft.registration}</div>
+          <div style={cStyles.cardType}>{aircraft.type}</div>
+        </div>
+        <div style={{ ...cStyles.cardStatus, color }}>
+          {icon} {status?.label || 'PRIVATE VISIBILITY'}
+        </div>
+      </div>
+
+      {/* Location */}
+      <div style={cStyles.cardBody}>
+        {hasPosition && (
+          <div style={cStyles.cardLocation}>
+            {isBase ? status.primaryBase : (status.region || 'Location tracked')}
+          </div>
+        )}
+
+        {status?.timestamp && (
+          <div style={cStyles.cardTime}>
+            Last public activity:<br />
+            <span style={cStyles.cardTimeVal}>{status.timestamp}</span>
+          </div>
+        )}
+
+        {!status?.timestamp && isBase && (
+          <div style={{ ...cStyles.cardTime, color: 'var(--c-subtle)' }}>
+            Operational base confirmed
+          </div>
+        )}
+      </div>
+
+      {/* Footer */}
+      <div style={cStyles.cardFooter}>
+        <span style={cStyles.cardSource}>
+          {status?.source || 'Public flight network'}
+        </span>
+        {status?.confidence > 0 && (
+          <span style={{ ...cStyles.cardConfidence, color }}>
+            {status.confidence}%
+          </span>
+        )}
+      </div>
+    </button>
+  );
+}
+
+// ── Connect Live Fleet modal ──────────────────────────────────────────────────
+function ConnectModal({ onClose, onNavigate }) {
+  return (
+    <motion.div
+      style={mStyles.overlay}
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      onClick={onClose}
+    >
+      <motion.div
+        style={mStyles.modal}
+        initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 12 }}
+        transition={{ duration: 0.35, ease: [0.25, 0.1, 0.25, 1] }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div style={mStyles.eyebrow}>PRIVATE FLEET CONNECTIVITY</div>
+        <div style={mStyles.title}>Connect Live Fleet</div>
+        <div style={mStyles.divider} />
+        <div style={mStyles.body}>
+          Your aircraft can be connected to a dedicated private ADS-B monitoring
+          network for real-time position, status, and alert capabilities.
+        </div>
+        <div style={mStyles.features}>
+          {['Real-time position updates every 10–30 seconds',
+            'Private data channel — not visible on public trackers',
+            'Fleet status dashboard with alerts',
+            'Full historical route archive'].map((f) => (
+            <div key={f} style={mStyles.feat}>
+              <span style={mStyles.featDot}>—</span>
+              <span style={mStyles.featText}>{f}</span>
+            </div>
+          ))}
+        </div>
+        <div style={mStyles.actions}>
+          <button
+            style={mStyles.primaryBtn}
+            onClick={() => { onNavigate?.('command'); onClose(); }}
+          >
+            REQUEST COMMAND CENTER
+          </button>
+          <button style={mStyles.ghostBtn} onClick={onClose}>
+            CLOSE
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
 export function LiveFleetScreen({
   getLive, getRecord, getStatus, diagnostics = [], mode = 'real',
   loading, scanning, error, lastScan, onRunScan, detectedCount,
+  onNavigate,
 }) {
-  const [selected, setSelected]   = useState(null);
-  const [panelOpen, setPanelOpen] = useState(false);
-  const [diagOpen, setDiagOpen]   = useState(false);
+  const [selected, setSelected]         = useState(null);
+  const [panelOpen, setPanelOpen]       = useState(false);
+  const [diagOpen, setDiagOpen]         = useState(false);
+  const [connectOpen, setConnectOpen]   = useState(false);
 
   const handleAircraftClick = useCallback((aircraft) => {
     setSelected(aircraft);
@@ -76,20 +192,7 @@ export function LiveFleetScreen({
   const airborne = FLEET.filter((a) => { const l = getLive(a.icao24 || a.id); return l && !l.onGround; }).length;
   const isDemo   = mode === 'demo';
 
-  // Count aircraft with at least some data (LIVE or LAST_SEEN or BASE_VERIFIED)
-  const monitoredCount = getStatus
-    ? FLEET.filter((a) => getStatus(a.id).status !== TRACK_STATUS.NOT_VISIBLE).length
-    : FLEET.length;
-
-  // Show premium overlay only when zero live signals AND no last-seen cache for any aircraft
-  const anyPositionKnown = getStatus
-    ? FLEET.some((a) => {
-        const s = getStatus(a.id);
-        return s.status === TRACK_STATUS.LIVE || s.status === TRACK_STATUS.LAST_SEEN;
-      })
-    : false;
-
-  const showPremium = !loading && !isDemo && detected === 0 && !anyPositionKnown;
+  const showReport = !loading && !isDemo && detected === 0;
 
   return (
     <motion.div
@@ -98,7 +201,12 @@ export function LiveFleetScreen({
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       transition={{ duration: 0.5 }}
     >
-      <FleetMap fleet={FLEET} getLive={getLive} onAircraftClick={handleAircraftClick} />
+      <FleetMap
+        fleet={FLEET}
+        getLive={getLive}
+        getStatus={getStatus}
+        onAircraftClick={handleAircraftClick}
+      />
 
       {/* DEMO banner */}
       {isDemo && (
@@ -108,7 +216,7 @@ export function LiveFleetScreen({
         </div>
       )}
 
-      {/* ── HUD top-left : LIVE NOW + fleet intelligence ── */}
+      {/* ── HUD top-left ── */}
       <div className="hud-tl" style={styles.hudTL}>
         <div style={styles.hudHeader}>
           <div style={{
@@ -169,21 +277,13 @@ export function LiveFleetScreen({
         {/* Aircraft list */}
         <div style={styles.acList}>
           {FLEET.map((aircraft) => {
-            const s = getStatus ? getStatus(aircraft.id) : null;
-            const ss = statusStyle(s);
+            const s  = getStatus ? getStatus(aircraft.id) : null;
+            const ss = statusDotStyle(s);
             return (
-              <button
-                key={aircraft.id}
-                className="ac-item"
-                style={styles.acItem}
+              <button key={aircraft.id} className="ac-item" style={styles.acItem}
                 onClick={() => handleAircraftClick(aircraft)}
-                title={`${aircraft.registration} — ${aircraft.fullType}`}
-              >
-                <div style={{
-                  ...styles.acDot,
-                  background: ss.dot,
-                  boxShadow: ss.glow || 'none',
-                }} />
+                title={`${aircraft.registration} — ${aircraft.fullType}`}>
+                <div style={{ ...styles.acDot, background: ss.dot, boxShadow: ss.glow || 'none' }} />
                 <div style={styles.acInfo}>
                   <span style={styles.acReg}>{aircraft.registration}</span>
                   <span style={styles.acType}>{aircraft.type}</span>
@@ -196,11 +296,10 @@ export function LiveFleetScreen({
           })}
         </div>
 
-        {/* Run live scan */}
+        {/* Scan button */}
         <button
           style={{ ...styles.scanBtn, opacity: scanning ? 0.6 : 1, cursor: scanning ? 'default' : 'pointer' }}
-          onClick={() => !scanning && onRunScan?.()}
-          disabled={scanning}
+          onClick={() => !scanning && onRunScan?.()} disabled={scanning}
         >
           <span style={{ ...styles.scanSpinner, animation: scanning ? 'spin 0.9s linear infinite' : 'none' }}>
             {scanning ? '◠' : '⟳'}
@@ -209,7 +308,7 @@ export function LiveFleetScreen({
         </button>
       </div>
 
-      {/* ── HUD bottom-left : status + diagnostics toggle ── */}
+      {/* ── HUD bottom-left ── */}
       <div className="hud-bl" style={styles.hudBL}>
         <div style={styles.blRow}>
           <span style={styles.blLabel}>LAST UPDATE</span>
@@ -226,23 +325,18 @@ export function LiveFleetScreen({
         </button>
       </div>
 
-      {/* ── Diagnostic panel ── */}
+      {/* ── Diagnostics panel ── */}
       <AnimatePresence>
         {diagOpen && (
-          <motion.div
-            className="diag-panel"
-            style={styles.diagPanel}
+          <motion.div className="diag-panel" style={styles.diagPanel}
             initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 16 }}
-            transition={{ duration: 0.25 }}
-          >
+            transition={{ duration: 0.25 }}>
             <div style={styles.diagHeader}>
               <span style={styles.diagTitle}>TRACKING DIAGNOSTICS</span>
               <span style={styles.diagMode}>{isDemo ? 'DEMO' : 'REAL'} · {lastUpdate || 'pending'}</span>
             </div>
             <div style={styles.diagList}>
-              {diagnostics.length === 0 && (
-                <div style={styles.diagEmpty}>Awaiting first scan…</div>
-              )}
+              {diagnostics.length === 0 && <div style={styles.diagEmpty}>Awaiting first scan…</div>}
               {diagnostics.map((d) => (
                 <div key={d.provider} style={styles.diagRow}>
                   <div style={styles.diagSource}>
@@ -263,30 +357,65 @@ export function LiveFleetScreen({
         )}
       </AnimatePresence>
 
-      {/* ── Premium overlay — when no live signal AND no cached position ── */}
+      {/* ── Fleet Intelligence Report (replaces old "No signal" overlay) ── */}
       <AnimatePresence>
-        {showPremium && (
+        {showReport && (
           <motion.div
-            className="premium-overlay"
-            style={styles.premium}
-            initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-            transition={{ duration: 0.5 }}
+            className="intel-report"
+            style={styles.report}
+            initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+            transition={{ duration: 0.5, delay: 0.2 }}
           >
-            <div style={styles.premiumInner}>
-              <div style={styles.premiumEyebrow}>FLEET INTELLIGENCE · LIVE SCAN COMPLETE</div>
-              <div style={styles.premiumTitle}>No public ADS-B signal right now</div>
-              <div style={styles.premiumText}>
-                The system scanned {diagnostics.length || 'all'} tracking sources in real time.
-                These private jets are not currently broadcasting on public networks —
-                they may be on the ground, outside ADS-B coverage, or blocked from public tracking.
-                Operational bases are displayed on the map.
+            <div style={styles.reportInner}>
+              {/* Header */}
+              <div style={styles.reportEyebrow}>FLEET INTELLIGENCE REPORT</div>
+              <div style={styles.reportSummary}>
+                Public tracking scan complete.&ensp;
+                <span style={{ color: 'var(--c-gold)' }}>{FLEET.length} aircraft monitored.</span>
               </div>
-              <div style={styles.premiumDivider} />
-              <div style={styles.premiumCta}>
-                Real-time position requires a private ADS-B / flight-tracking provider connection.
+              <div style={styles.reportNote}>
+                No active public broadcast detected at this moment.
+                Latest known operational data has been recovered.
               </div>
+
+              <div style={styles.reportDivider} />
+
+              {/* Per-aircraft cards */}
+              <div className="intel-cards" style={styles.reportCards}>
+                {FLEET.map((aircraft) => (
+                  <AircraftIntelCard
+                    key={aircraft.id}
+                    aircraft={aircraft}
+                    status={getStatus ? getStatus(aircraft.id) : null}
+                    onClick={handleAircraftClick}
+                  />
+                ))}
+              </div>
+
+              <div style={styles.reportDivider} />
+
+              {/* CTA */}
+              <div style={styles.reportCtaLine}>
+                Private fleet visibility can be unlocked.
+              </div>
+              <button
+                style={styles.connectBtn}
+                onClick={() => setConnectOpen(true)}
+              >
+                CONNECT LIVE FLEET
+              </button>
             </div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Connect modal */}
+      <AnimatePresence>
+        {connectOpen && (
+          <ConnectModal
+            onClose={() => setConnectOpen(false)}
+            onNavigate={onNavigate}
+          />
         )}
       </AnimatePresence>
 
@@ -305,6 +434,7 @@ export function LiveFleetScreen({
   );
 }
 
+// ── Styles ────────────────────────────────────────────────────────────────────
 const styles = {
   screen: { position: 'fixed', inset: 0, paddingTop: 56, background: '#000' },
 
@@ -331,7 +461,6 @@ const styles = {
     fontFamily: 'var(--f-mono)', fontSize: 7, letterSpacing: '1.5px', color: 'var(--c-subtle)',
     border: '1px solid var(--c-border)', borderRadius: 2, padding: '1px 5px',
   },
-
   intelStatus: {
     display: 'flex', flexDirection: 'column', gap: 3, marginBottom: 10,
     padding: '8px 10px',
@@ -340,7 +469,6 @@ const styles = {
   intelRow: { display: 'flex', alignItems: 'center', gap: 6 },
   intelDot: { fontFamily: 'var(--f-mono)', fontSize: 7, color: 'var(--c-gold)', flexShrink: 0 },
   intelText: { fontFamily: 'var(--f-mono)', fontSize: 8, letterSpacing: '0.3px', color: 'var(--c-soft)' },
-
   hudDivider: { height: 1, background: 'var(--c-border)', margin: '0 0 10px' },
 
   counterRow: {
@@ -369,8 +497,7 @@ const styles = {
     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
     background: 'rgba(201,168,76,0.08)', border: '1px solid var(--c-gold-dim)', borderRadius: 2,
     padding: '9px 10px', color: 'var(--c-gold)',
-    fontFamily: 'var(--f-mono)', fontSize: 9, letterSpacing: '2px',
-    transition: 'background 0.2s',
+    fontFamily: 'var(--f-mono)', fontSize: 9, letterSpacing: '2px', transition: 'background 0.2s',
   },
   scanSpinner: { display: 'inline-block', fontSize: 11, lineHeight: 1 },
 
@@ -407,27 +534,121 @@ const styles = {
   diagCount: { fontFamily: 'var(--f-mono)', fontSize: 8, color: 'var(--c-muted)' },
   diagReason: { fontFamily: 'var(--f-sans)', fontSize: 9, color: 'var(--c-muted)', paddingLeft: 12, lineHeight: 1.4 },
 
-  premium: {
+  // ── Fleet Intelligence Report ──
+  report: {
     position: 'absolute',
     top: '50%',
     left: '50%',
     transform: 'translate(-50%, -50%)',
     zIndex: 40,
-    width: 'min(440px, 90vw)',
-    pointerEvents: 'none',
+    width: 'min(680px, 90vw)',
+    maxHeight: 'calc(100vh - 120px)',
+    pointerEvents: 'all',
   },
-  premiumInner: {
-    background: 'rgba(0,0,0,0.78)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)',
-    border: '1px solid var(--c-border)', borderRadius: 4, padding: '28px 24px 24px', textAlign: 'center',
+  reportInner: {
+    background: 'rgba(4,4,4,0.90)',
+    backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)',
+    border: '1px solid var(--c-border)',
+    borderRadius: 4, padding: '24px 24px 20px',
+    overflowY: 'auto',
+    maxHeight: 'calc(100vh - 120px)',
   },
-  premiumEyebrow: { fontFamily: 'var(--f-mono)', fontSize: 8.5, letterSpacing: '3px', color: 'var(--c-gold)', marginBottom: 14 },
-  premiumTitle: { fontFamily: 'var(--f-sans)', fontWeight: 200, fontSize: 20, letterSpacing: '1px', color: 'var(--c-white)', marginBottom: 12 },
-  premiumText: { fontFamily: 'var(--f-sans)', fontSize: 12, color: 'var(--c-soft)', lineHeight: 1.7 },
-  premiumDivider: { height: 1, width: 40, background: 'var(--c-gold-dim)', margin: '18px auto' },
-  premiumCta: { fontFamily: 'var(--f-mono)', fontSize: 10, letterSpacing: '1px', color: 'var(--c-silver)', lineHeight: 1.6 },
+  reportEyebrow: {
+    fontFamily: 'var(--f-mono)', fontSize: 9, letterSpacing: '4px', color: 'var(--c-gold)',
+    marginBottom: 8, textTransform: 'uppercase',
+  },
+  reportSummary: {
+    fontFamily: 'var(--f-sans)', fontWeight: 200, fontSize: 17, letterSpacing: '0.5px',
+    color: 'var(--c-silver)', lineHeight: 1.4, marginBottom: 6,
+  },
+  reportNote: {
+    fontFamily: 'var(--f-sans)', fontSize: 12, color: 'var(--c-soft)',
+    lineHeight: 1.7, marginBottom: 2,
+  },
+  reportDivider: { height: 1, background: 'var(--c-border)', margin: '16px 0' },
+  reportCards: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(3, 1fr)',
+    gap: 10,
+  },
+  reportCtaLine: {
+    fontFamily: 'var(--f-mono)', fontSize: 9.5, letterSpacing: '0.5px',
+    color: 'var(--c-subtle)', marginBottom: 10,
+  },
+  connectBtn: {
+    display: 'inline-flex', alignItems: 'center', gap: 8,
+    background: 'rgba(201,168,76,0.1)',
+    border: '1px solid var(--c-gold)',
+    borderRadius: 2, padding: '10px 20px',
+    fontFamily: 'var(--f-mono)', fontSize: 9, letterSpacing: '2.5px',
+    color: 'var(--c-gold)', cursor: 'pointer',
+    transition: 'background 0.2s, color 0.2s',
+  },
 
   attribution: {
     position: 'absolute', bottom: 8, right: 8,
     fontFamily: 'var(--f-mono)', fontSize: 8, color: 'var(--c-muted)', letterSpacing: '0.5px', zIndex: 50,
+  },
+};
+
+// ── Per-aircraft card styles ───────────────────────────────────────────────────
+const cStyles = {
+  card: {
+    background: 'rgba(255,255,255,0.025)',
+    border: '1px solid var(--c-border)',
+    borderRadius: 3, padding: '12px 14px',
+    display: 'flex', flexDirection: 'column', gap: 6,
+    textAlign: 'left', cursor: 'pointer',
+    transition: 'background 0.15s, border-color 0.15s',
+    width: '100%',
+  },
+  cardHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 4 },
+  cardReg: { fontFamily: 'var(--f-mono)', fontSize: 14, fontWeight: 400, color: 'var(--c-white)', letterSpacing: '2px' },
+  cardType: { fontFamily: 'var(--f-sans)', fontSize: 9, color: 'var(--c-subtle)', marginTop: 2 },
+  cardStatus: { fontFamily: 'var(--f-mono)', fontSize: 8.5, letterSpacing: '1px', textAlign: 'right', flexShrink: 0 },
+  cardBody: { display: 'flex', flexDirection: 'column', gap: 4 },
+  cardLocation: {
+    fontFamily: 'var(--f-sans)', fontWeight: 300, fontSize: 13,
+    color: 'var(--c-silver)', letterSpacing: '0.3px',
+  },
+  cardTime: { fontFamily: 'var(--f-mono)', fontSize: 8.5, color: 'var(--c-subtle)', lineHeight: 1.5 },
+  cardTimeVal: { color: 'var(--c-soft)', fontFamily: 'var(--f-mono)' },
+  cardFooter: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 4, marginTop: 2 },
+  cardSource: { fontFamily: 'var(--f-mono)', fontSize: 7.5, color: 'var(--c-muted)', letterSpacing: '0.3px' },
+  cardConfidence: { fontFamily: 'var(--f-mono)', fontSize: 8.5, fontWeight: 500, letterSpacing: '0.5px' },
+};
+
+// ── Connect modal styles ───────────────────────────────────────────────────────
+const mStyles = {
+  overlay: {
+    position: 'fixed', inset: 0, zIndex: 500,
+    background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+  },
+  modal: {
+    background: 'rgba(10,10,10,0.98)',
+    border: '1px solid var(--c-border)', borderRadius: 4,
+    padding: '32px 32px 28px', width: 'min(460px, 90vw)',
+    display: 'flex', flexDirection: 'column', gap: 0,
+  },
+  eyebrow: { fontFamily: 'var(--f-mono)', fontSize: 8.5, letterSpacing: '3.5px', color: 'var(--c-gold)', marginBottom: 8 },
+  title: { fontFamily: 'var(--f-sans)', fontWeight: 200, fontSize: 22, color: 'var(--c-white)', letterSpacing: '0.5px', marginBottom: 4 },
+  divider: { height: 1, background: 'var(--c-border)', margin: '14px 0' },
+  body: { fontFamily: 'var(--f-sans)', fontSize: 12, color: 'var(--c-soft)', lineHeight: 1.7, marginBottom: 14 },
+  features: { display: 'flex', flexDirection: 'column', gap: 7, marginBottom: 20 },
+  feat: { display: 'flex', alignItems: 'flex-start', gap: 10 },
+  featDot: { fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--c-gold)', flexShrink: 0, marginTop: 1 },
+  featText: { fontFamily: 'var(--f-sans)', fontSize: 11, color: 'var(--c-silver)', lineHeight: 1.5 },
+  actions: { display: 'flex', gap: 10, flexWrap: 'wrap' },
+  primaryBtn: {
+    flex: 1, padding: '12px 16px',
+    background: 'rgba(201,168,76,0.12)', border: '1px solid var(--c-gold)', borderRadius: 2,
+    fontFamily: 'var(--f-mono)', fontSize: 9, letterSpacing: '2px', color: 'var(--c-gold)', cursor: 'pointer',
+    transition: 'background 0.2s',
+  },
+  ghostBtn: {
+    padding: '12px 18px',
+    background: 'none', border: '1px solid var(--c-border)', borderRadius: 2,
+    fontFamily: 'var(--f-mono)', fontSize: 9, letterSpacing: '2px', color: 'var(--c-subtle)', cursor: 'pointer',
   },
 };
