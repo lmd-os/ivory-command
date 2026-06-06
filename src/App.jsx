@@ -13,7 +13,15 @@ export default function App() {
   const [phase,  setPhase]  = useState('intro');
   const [screen, setScreen] = useState('fleet');
 
-  const { getLive, loading, error, lastUpdated, airborneCount, groundCount } = useOpenSky();
+  const {
+    getLive,
+    loading,
+    error,
+    lastUpdated,
+    detectedCount,
+    airborneCount,
+    groundCount,
+  } = useOpenSky();
 
   const handleIntroComplete = useCallback(() => {
     setPhase('main');
@@ -36,6 +44,7 @@ export default function App() {
                   loading={loading}
                   error={error}
                   lastUpdated={lastUpdated}
+                  detectedCount={detectedCount}
                 />
               )}
               {screen === 'aircraft' && (

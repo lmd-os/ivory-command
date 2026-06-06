@@ -3,7 +3,7 @@ import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { BASES } from '../data/fleet';
 
-/* ── Dark luxury map style (CARTO dark no-labels, free with attribution) ── */
+/* ── Dark luxury map — CARTO dark no-labels (free) ── */
 const MAP_STYLE = {
   version: 8,
   sources: {
@@ -20,95 +20,89 @@ const MAP_STYLE = {
     },
   },
   layers: [
-    {
-      id: 'bg',
-      type: 'background',
-      paint: { 'background-color': '#000000' },
-    },
-    {
-      id: 'tiles',
-      type: 'raster',
-      source: 'carto-dark',
-      paint: { 'raster-opacity': 0.65 },
-    },
+    { id: 'bg',    type: 'background', paint: { 'background-color': '#000000' } },
+    { id: 'tiles', type: 'raster',     source: 'carto-dark', paint: { 'raster-opacity': 0.7 } },
   ],
 };
 
-/* ── Aircraft top-view SVG ── */
-const aircraftSVG = (color = '#c9a84c', size = 22) => `
-  <svg width="${size}" height="${size}" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+/* ── Top-view aircraft SVG (airborne — gold) ── */
+const svgAirborne = (heading = 0, size = 24) => `
+  <svg width="${size}" height="${size}" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"
+       style="transform:rotate(${heading - 90}deg);display:block;">
     <path d="M16 3L13 11L3 17.5V20L13 16.5V24.5L10 26.5V28.5L16 27L22 28.5V26.5L19 24.5V16.5L29 20V17.5L19 11L16 3Z"
-      fill="${color}" />
+      fill="#c9a84c" />
   </svg>
 `;
 
-const groundAircraftSVG = (size = 18) => `
-  <svg width="${size}" height="${size}" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+/* ── Top-view aircraft SVG (on ground — grey) ── */
+const svgGround = (size = 20) => `
+  <svg width="${size}" height="${size}" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg"
+       style="display:block;">
     <path d="M16 3L13 11L3 17.5V20L13 16.5V24.5L10 26.5V28.5L16 27L22 28.5V26.5L19 24.5V16.5L29 20V17.5L19 11L16 3Z"
-      fill="#5a5a5a" />
+      fill="#4a4a4a" />
   </svg>
 `;
 
-function createAircraftElement(aircraft, liveData, onClick) {
-  const onGround = liveData?.onGround;
-  const heading  = liveData?.heading ?? 0;
-  const hasLive  = liveData && liveData.longitude != null;
+/* ── Create DOM element for an aircraft marker ── */
+function createAircraftEl(aircraft, live, onClick) {
+  const onGround  = live?.onGround ?? false;
+  const heading   = live?.heading  ?? 0;
 
   const el = document.createElement('div');
   el.className = `ac-marker${onGround ? ' ac-marker--ground' : ''}`;
   el.setAttribute('title', `${aircraft.registration} — ${aircraft.type}`);
 
   el.innerHTML = `
-    <div class="ac-marker__ring"></div>
     ${!onGround ? '<div class="ac-marker__pulse"></div>' : ''}
-    <div class="ac-marker__icon" style="transform: rotate(${heading - 90}deg)">
-      ${onGround ? groundAircraftSVG() : aircraftSVG()}
+    <div class="ac-marker__ring"></div>
+    <div class="ac-marker__icon">
+      ${onGround ? svgGround() : svgAirborne(heading)}
     </div>
+    <div class="ac-marker__label">${aircraft.registration}</div>
   `;
 
-  el.addEventListener('click', (e) => {
-    e.stopPropagation();
-    onClick(aircraft);
-  });
-
+  el.addEventListener('click', (e) => { e.stopPropagation(); onClick(aircraft); });
   return el;
 }
 
-function createBaseElement(base) {
+/* ── Create DOM element for an operating base ── */
+function createBaseEl(base) {
   const el = document.createElement('div');
   el.className = 'base-marker';
   el.title = `${base.name} — ${base.airport}`;
-  el.innerHTML = `<div class="base-marker__dot"></div>`;
+  el.innerHTML = `
+    <div class="base-marker__dot"></div>
+    <div class="base-marker__name">${base.name.toUpperCase()}</div>
+  `;
   return el;
 }
 
 export function FleetMap({ fleet, getLive, onAircraftClick }) {
-  const containerRef = useRef(null);
-  const mapRef       = useRef(null);
-  const markersRef   = useRef({});
+  const containerRef   = useRef(null);
+  const mapRef         = useRef(null);
+  const markersRef     = useRef({});
   const baseMarkersRef = useRef({});
 
-  /* ── Initialize map once ── */
+  /* ── Init map once ── */
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return;
 
     mapRef.current = new maplibregl.Map({
-      container: containerRef.current,
-      style: MAP_STYLE,
-      center: [22, 10],
-      zoom: 2.8,
-      minZoom: 1,
-      maxZoom: 14,
+      container:         containerRef.current,
+      style:             MAP_STYLE,
+      center:            [22, 10],
+      zoom:              2.8,
+      minZoom:           1,
+      maxZoom:           14,
       attributionControl: false,
-      logoPosition: 'bottom-right',
+      logoPosition:      'bottom-right',
     });
 
     const map = mapRef.current;
 
-    /* Add base markers after map loads */
     map.on('load', () => {
       BASES.forEach((base) => {
-        const el     = createBaseElement(base);
+        const el     = createBaseEl(base);
         const marker = new maplibregl.Marker({ element: el, anchor: 'center' })
           .setLngLat(base.coordinates)
           .addTo(map);
@@ -124,7 +118,7 @@ export function FleetMap({ fleet, getLive, onAircraftClick }) {
     };
   }, []);
 
-  /* ── Update aircraft markers when live data changes ── */
+  /* ── Update aircraft markers on each data change ── */
   const updateMarkers = useCallback(() => {
     if (!mapRef.current) return;
     const map = mapRef.current;
@@ -132,17 +126,18 @@ export function FleetMap({ fleet, getLive, onAircraftClick }) {
     fleet.forEach((aircraft) => {
       const live = getLive(aircraft.icao24);
 
-      /* Remove stale marker */
+      // Remove stale marker
       if (markersRef.current[aircraft.id]) {
         markersRef.current[aircraft.id].remove();
         delete markersRef.current[aircraft.id];
       }
 
-      if (!live || live.longitude == null || live.latitude == null) return;
+      // Only place a marker when position is known
+      if (!live || live.lat == null || live.lon == null) return;
 
-      const el     = createAircraftElement(aircraft, live, onAircraftClick);
+      const el     = createAircraftEl(aircraft, live, onAircraftClick);
       const marker = new maplibregl.Marker({ element: el, anchor: 'center' })
-        .setLngLat([live.longitude, live.latitude])
+        .setLngLat([live.lon, live.lat])
         .addTo(map);
 
       markersRef.current[aircraft.id] = marker;
@@ -156,12 +151,7 @@ export function FleetMap({ fleet, getLive, onAircraftClick }) {
   return (
     <div
       ref={containerRef}
-      style={{
-        position: 'absolute',
-        inset: 0,
-        width: '100%',
-        height: '100%',
-      }}
+      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
     />
   );
 }

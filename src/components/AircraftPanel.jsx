@@ -1,18 +1,36 @@
 import { motion, AnimatePresence } from 'framer-motion';
 
-const fmt = (v, unit = '') => (v == null ? 'Unavailable' : `${v.toLocaleString()}${unit ? ' ' + unit : ''}`);
+const fmt = (v, unit = '') =>
+  v == null ? 'Unavailable' : `${typeof v === 'number' ? v.toLocaleString() : v}${unit ? ' ' + unit : ''}`;
+
 const fmtCoord = (v, pos, neg) => {
   if (v == null) return 'Unavailable';
   const dir = v >= 0 ? pos : neg;
   return `${Math.abs(v).toFixed(4)}° ${dir}`;
 };
 
+const fmtTime = (unixSec) => {
+  if (unixSec == null) return 'Unavailable';
+  return new Date(unixSec * 1000).toLocaleTimeString('en-GB', {
+    hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'UTC',
+  }) + ' UTC';
+};
+
 function Row({ label, value, gold = false, mono = true }) {
+  const isUnavail = value === 'Unavailable' || value == null;
   return (
     <div style={styles.row}>
       <div style={styles.rowLabel}>{label}</div>
-      <div style={{ ...styles.rowValue, fontFamily: mono ? 'var(--f-mono)' : 'var(--f-sans)', color: gold ? 'var(--c-gold)' : (value === 'Unavailable' ? 'var(--c-subtle)' : 'var(--c-white)') }}>
-        {value}
+      <div style={{
+        ...styles.rowValue,
+        fontFamily: mono ? 'var(--f-mono)' : 'var(--f-sans)',
+        color: gold
+          ? 'var(--c-gold)'
+          : isUnavail
+            ? 'var(--c-muted)'
+            : 'var(--c-white)',
+      }}>
+        {value ?? 'Unavailable'}
       </div>
     </div>
   );
@@ -20,8 +38,27 @@ function Row({ label, value, gold = false, mono = true }) {
 
 function Badge({ label, color = 'var(--c-muted)' }) {
   return (
-    <span style={{ ...styles.badge, background: `${color}22`, border: `1px solid ${color}44`, color }}>
+    <span style={{
+      ...styles.badge,
+      background: `${color}22`,
+      border: `1px solid ${color}44`,
+      color,
+    }}>
       {label}
+    </span>
+  );
+}
+
+function SourcePill({ source }) {
+  if (!source) return null;
+  const isAdsb = source.includes('ADS-B');
+  return (
+    <span style={{
+      ...styles.sourcePill,
+      color: isAdsb ? 'var(--c-blue)' : 'var(--c-subtle)',
+      borderColor: isAdsb ? 'rgba(74,144,217,0.3)' : 'var(--c-border)',
+    }}>
+      {source}
     </span>
   );
 }
@@ -34,14 +71,17 @@ export function AircraftPanel({ aircraft, liveData, onClose }) {
   const altitude = live?.baroAlt_ft ?? live?.geoAlt_ft;
   const speed    = live?.velocity_kts;
   const heading  = live?.heading;
-  const lat      = live?.latitude;
-  const lon      = live?.longitude;
+  const lat      = live?.lat ?? null;
+  const lon      = live?.lon ?? null;
+  const callsign = live?.callsign || null;
+  const origin   = live?.originCountry || null;
 
-  const lastContact = live?.lastContact
-    ? new Date(live.lastContact * 1000).toLocaleTimeString('en-GB', {
-        hour: '2-digit', minute: '2-digit', second: '2-digit'
-      }) + ' UTC'
-    : 'Unavailable';
+  // "Destination" is not publicly available in ADS-B data for private jets.
+  // We reflect this honestly.
+  const destination = null;
+
+  const lastContactTime = live?.lastContact ? fmtTime(live.lastContact) : 'Unavailable';
+  const altitudeType    = live?.baroAlt_ft != null ? 'Baro altitude' : 'Geo altitude';
 
   return (
     <AnimatePresence>
@@ -51,22 +91,22 @@ export function AircraftPanel({ aircraft, liveData, onClose }) {
         initial={{ x: '100%', opacity: 0 }}
         animate={{ x: 0, opacity: 1 }}
         exit={{ x: '100%', opacity: 0 }}
-        transition={{ duration: 0.45, ease: [0.25, 0.1, 0.25, 1] }}
+        transition={{ duration: 0.4, ease: [0.25, 0.1, 0.25, 1] }}
       >
-        {/* Header */}
+        {/* ── Header ── */}
         <div style={styles.panelHeader}>
           <div>
             <div style={styles.reg}>{aircraft.registration}</div>
-            <div style={styles.type}>{aircraft.fullType}</div>
+            <div style={styles.typeLabel}>{aircraft.fullType}</div>
           </div>
           <button style={styles.closeBtn} onClick={onClose} aria-label="Close panel">
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <path d="M2 2L14 14M14 2L2 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+              <path d="M1 1L13 13M13 1L1 13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
             </svg>
           </button>
         </div>
 
-        {/* Status bar */}
+        {/* ── Status badges ── */}
         <div style={styles.statusBar}>
           {live ? (
             <Badge
@@ -74,32 +114,48 @@ export function AircraftPanel({ aircraft, liveData, onClose }) {
               color={airborne ? 'var(--c-green)' : 'var(--c-amber)'}
             />
           ) : (
-            <Badge label="○ NOT TRACKED" color="var(--c-muted)" />
+            <Badge label="○ SIGNAL UNAVAILABLE" color="var(--c-muted)" />
           )}
-          {aircraft.medevac && <Badge label="MEDEVAC" color="var(--c-blue)" />}
-          {aircraft.vip && <Badge label="VIP" color="var(--c-gold)" />}
+          {aircraft.medevac && <Badge label="MEDEVAC"      color="var(--c-blue)" />}
+          {aircraft.vip     && <Badge label="VIP"          color="var(--c-gold)" />}
         </div>
 
-        {/* Divider */}
         <div style={styles.divider} />
 
-        {/* Scroll content */}
+        {/* ── Scroll content ── */}
         <div style={styles.content}>
 
-          {/* Live data section */}
+          {/* LIVE POSITION */}
           <div style={styles.section}>
-            <div style={styles.sectionTitle}>Live Position</div>
-            <Row label="Latitude"  value={fmtCoord(lat, 'N', 'S')} />
-            <Row label="Longitude" value={fmtCoord(lon, 'E', 'W')} />
-            <Row label="Altitude"  value={altitude != null ? `${altitude.toLocaleString()} ft` : 'Unavailable'} />
-            <Row label="Speed"     value={speed != null ? `${speed} kts` : 'Unavailable'} />
-            <Row label="Heading"   value={heading != null ? `${heading}°` : 'Unavailable'} />
-            <Row label="Last contact" value={lastContact} mono={false} />
+            <div style={styles.sectionHeader}>
+              <span style={styles.sectionTitle}>Live Position</span>
+              {live?.source && <SourcePill source={live.source} />}
+            </div>
+
+            <Row label="Latitude"    value={fmtCoord(lat, 'N', 'S')} />
+            <Row label="Longitude"   value={fmtCoord(lon, 'E', 'W')} />
+            <Row label={altitudeType} value={altitude != null ? `${altitude.toLocaleString()} ft` : 'Unavailable'} />
+            <Row label="Speed"       value={speed != null ? `${speed} kts` : 'Unavailable'} />
+            <Row label="Heading"     value={heading != null ? `${heading}°` : 'Unavailable'} />
+            {callsign && (
+              <Row label="Callsign"  value={callsign} gold />
+            )}
+            <Row label="Last contact" value={lastContactTime} mono={false} />
           </div>
 
           <div style={styles.divider} />
 
-          {/* Aircraft specs */}
+          {/* FLIGHT INFO — only what's publicly known */}
+          <div style={styles.section}>
+            <div style={styles.sectionTitle}>Flight Info</div>
+            <Row label="Origin"      value={origin || 'Unavailable'} mono={false} />
+            <Row label="Destination" value={destination || 'Unavailable'} mono={false} />
+            <Row label="Squawk"      value={live?.squawk || 'Unavailable'} />
+          </div>
+
+          <div style={styles.divider} />
+
+          {/* AIRCRAFT SPECS */}
           <div style={styles.section}>
             <div style={styles.sectionTitle}>Aircraft</div>
             <Row label="Registration" value={aircraft.registration} gold />
@@ -112,18 +168,18 @@ export function AircraftPanel({ aircraft, liveData, onClose }) {
 
           <div style={styles.divider} />
 
-          {/* Performance */}
+          {/* PERFORMANCE */}
           <div style={styles.section}>
             <div style={styles.sectionTitle}>Performance</div>
-            <Row label="Range"    value={fmt(aircraft.rangeKm, 'km')} />
-            <Row label="Speed"    value={fmt(aircraft.maxSpeedKmh, 'km/h')} />
-            <Row label="Ceiling"  value={fmt(aircraft.ceilingFt, 'ft')} />
-            <Row label="Engines"  value={aircraft.engines} mono={false} />
+            <Row label="Range"   value={fmt(aircraft.rangeKm, 'km')} />
+            <Row label="Speed"   value={fmt(aircraft.maxSpeedKmh, 'km/h')} />
+            <Row label="Ceiling" value={fmt(aircraft.ceilingFt, 'ft')} />
+            <Row label="Engines" value={aircraft.engines} mono={false} />
           </div>
 
           <div style={styles.divider} />
 
-          {/* Bases */}
+          {/* BASES */}
           <div style={styles.section}>
             <div style={styles.sectionTitle}>Operating Bases</div>
             {aircraft.bases.map((base) => (
@@ -134,9 +190,14 @@ export function AircraftPanel({ aircraft, liveData, onClose }) {
             ))}
           </div>
 
-          {/* Source note */}
-          <div style={styles.source}>
-            Data: public sources — ch-aviation, flightdb, OpenSky Network
+          {/* Data transparency note */}
+          <div style={styles.dataNote}>
+            <div style={styles.noteTitle}>DATA SOURCES</div>
+            <div style={styles.noteText}>
+              Position: {live?.source || 'Not available'} — public ADS-B transponder data only.
+              Origin/destination: not broadcast publicly by private operators.
+              Aircraft specs: ch-aviation, flightdb.net, ivoryjetservices.com.
+            </div>
           </div>
         </div>
       </motion.aside>
@@ -151,9 +212,9 @@ const styles = {
     right: 0,
     bottom: 0,
     width: 'min(320px, 100vw)',
-    background: 'rgba(10,10,10,0.96)',
-    backdropFilter: 'blur(24px)',
-    WebkitBackdropFilter: 'blur(24px)',
+    background: 'rgba(8,8,8,0.97)',
+    backdropFilter: 'blur(28px)',
+    WebkitBackdropFilter: 'blur(28px)',
     borderLeft: '1px solid var(--c-border)',
     display: 'flex',
     flexDirection: 'column',
@@ -164,20 +225,20 @@ const styles = {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    padding: '20px 20px 12px',
+    padding: '18px 18px 10px',
   },
   reg: {
     fontFamily: 'var(--f-mono)',
     fontSize: 22,
-    fontWeight: 400,
-    letterSpacing: '3px',
+    fontWeight: 300,
+    letterSpacing: '4px',
     color: 'var(--c-white)',
   },
-  type: {
+  typeLabel: {
     fontFamily: 'var(--f-sans)',
-    fontSize: 11,
+    fontSize: 10,
     color: 'var(--c-subtle)',
-    letterSpacing: '1px',
+    letterSpacing: '0.5px',
     marginTop: 4,
   },
   closeBtn: {
@@ -185,31 +246,41 @@ const styles = {
     border: 'none',
     cursor: 'pointer',
     color: 'var(--c-subtle)',
-    padding: 4,
+    padding: 6,
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    transition: 'color var(--dur-fast)',
+    borderRadius: 2,
+    transition: 'color 0.15s',
     flexShrink: 0,
   },
   statusBar: {
     display: 'flex',
     gap: 6,
-    padding: '0 20px 14px',
+    padding: '0 18px 12px',
     flexWrap: 'wrap',
   },
   badge: {
     fontFamily: 'var(--f-mono)',
-    fontSize: 9,
+    fontSize: 8.5,
     fontWeight: 500,
     letterSpacing: '1.5px',
     padding: '3px 8px',
     borderRadius: 2,
   },
+  sourcePill: {
+    fontFamily: 'var(--f-mono)',
+    fontSize: 7.5,
+    letterSpacing: '0.5px',
+    padding: '2px 6px',
+    borderRadius: 2,
+    border: '1px solid',
+    flexShrink: 0,
+  },
   divider: {
     height: 1,
     background: 'var(--c-border)',
-    margin: '0 20px',
+    margin: '0 18px',
     flexShrink: 0,
   },
   content: {
@@ -218,19 +289,24 @@ const styles = {
     padding: '0 0 24px',
   },
   section: {
-    padding: '16px 20px',
+    padding: '14px 18px',
     display: 'flex',
     flexDirection: 'column',
-    gap: 10,
+    gap: 9,
+  },
+  sectionHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 2,
   },
   sectionTitle: {
     fontFamily: 'var(--f-mono)',
-    fontSize: 9,
+    fontSize: 8.5,
     fontWeight: 500,
     letterSpacing: '3px',
     textTransform: 'uppercase',
     color: 'var(--c-gold)',
-    marginBottom: 4,
   },
   row: {
     display: 'flex',
@@ -240,13 +316,13 @@ const styles = {
   },
   rowLabel: {
     fontFamily: 'var(--f-mono)',
-    fontSize: 10,
-    letterSpacing: '1px',
+    fontSize: 9.5,
+    letterSpacing: '0.5px',
     color: 'var(--c-subtle)',
     flexShrink: 0,
   },
   rowValue: {
-    fontSize: 12,
+    fontSize: 11,
     textAlign: 'right',
     lineHeight: 1.4,
   },
@@ -264,15 +340,28 @@ const styles = {
   },
   baseName: {
     fontFamily: 'var(--f-sans)',
-    fontSize: 12,
+    fontSize: 11,
     color: 'var(--c-silver)',
   },
-  source: {
+  dataNote: {
+    margin: '8px 18px 0',
+    padding: '10px 12px',
+    background: 'rgba(255,255,255,0.02)',
+    border: '1px solid var(--c-border)',
+    borderRadius: 2,
+  },
+  noteTitle: {
     fontFamily: 'var(--f-mono)',
-    fontSize: 9,
+    fontSize: 7,
+    letterSpacing: '2px',
     color: 'var(--c-muted)',
-    padding: '12px 20px',
+    marginBottom: 5,
+  },
+  noteText: {
+    fontFamily: 'var(--f-mono)',
+    fontSize: 8.5,
+    color: 'var(--c-muted)',
     lineHeight: 1.6,
-    letterSpacing: '0.5px',
+    letterSpacing: '0.3px',
   },
 };

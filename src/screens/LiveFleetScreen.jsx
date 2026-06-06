@@ -4,9 +4,9 @@ import { FleetMap } from '../components/FleetMap';
 import { AircraftPanel } from '../components/AircraftPanel';
 import { FLEET } from '../data/fleet';
 
-export function LiveFleetScreen({ getLive, loading, lastUpdated, error }) {
-  const [selected, setSelected]         = useState(null);
-  const [panelOpen, setPanelOpen]       = useState(false);
+export function LiveFleetScreen({ getLive, loading, lastUpdated, error, detectedCount }) {
+  const [selected, setSelected]   = useState(null);
+  const [panelOpen, setPanelOpen] = useState(false);
 
   const handleAircraftClick = useCallback((aircraft) => {
     setSelected(aircraft);
@@ -18,14 +18,14 @@ export function LiveFleetScreen({ getLive, loading, lastUpdated, error }) {
     setTimeout(() => setSelected(null), 450);
   }, []);
 
-  const airborneList = FLEET.filter((a) => {
-    const live = getLive(a.icao24);
-    return live && !live.onGround;
-  });
-
   const lastUpdate = lastUpdated
-    ? lastUpdated.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' UTC'
+    ? lastUpdated.toLocaleTimeString('en-GB', {
+        hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'UTC',
+      }) + ' UTC'
     : null;
+
+  const detected  = detectedCount ?? 0;
+  const airborne  = FLEET.filter(a => { const l = getLive(a.icao24); return l && !l.onGround; }).length;
 
   return (
     <motion.div
@@ -42,13 +42,39 @@ export function LiveFleetScreen({ getLive, loading, lastUpdated, error }) {
         onAircraftClick={handleAircraftClick}
       />
 
-      {/* HUD overlay — top left */}
+      {/* ── HUD top-left : LIVE NOW ── */}
       <div style={styles.hudTL}>
-        <div style={styles.hudTitle}>LIVE FLEET</div>
-        <div style={styles.hudSub}>
-          Ivory Jet Services — {FLEET.length} aircraft registered
+        {/* Header */}
+        <div style={styles.hudHeader}>
+          <div style={styles.liveDot} />
+          <span style={styles.liveLabel}>LIVE NOW</span>
         </div>
 
+        {/* Counters row */}
+        <div style={styles.counterRow}>
+          <div style={styles.counter}>
+            <span style={{ ...styles.counterVal, color: detected > 0 ? 'var(--c-gold)' : 'var(--c-muted)' }}>
+              {detected}
+            </span>
+            <span style={styles.counterLabel}>DETECTED</span>
+          </div>
+          <div style={styles.counterDivider} />
+          <div style={styles.counter}>
+            <span style={{ ...styles.counterVal, color: airborne > 0 ? 'var(--c-green)' : 'var(--c-muted)' }}>
+              {airborne}
+            </span>
+            <span style={styles.counterLabel}>AIRBORNE</span>
+          </div>
+          <div style={styles.counterDivider} />
+          <div style={styles.counter}>
+            <span style={{ ...styles.counterVal, color: 'var(--c-subtle)' }}>
+              {FLEET.length}
+            </span>
+            <span style={styles.counterLabel}>FLEET</span>
+          </div>
+        </div>
+
+        {/* Aircraft list */}
         <div style={styles.acList}>
           {FLEET.map((aircraft) => {
             const live    = getLive(aircraft.icao24);
@@ -60,10 +86,12 @@ export function LiveFleetScreen({ getLive, loading, lastUpdated, error }) {
                 key={aircraft.id}
                 style={styles.acItem}
                 onClick={() => handleAircraftClick(aircraft)}
+                title={`${aircraft.registration} — ${aircraft.fullType}`}
               >
                 <div style={{
-                  ...styles.acStatus,
+                  ...styles.acDot,
                   background: airborne ? 'var(--c-green)' : tracked ? 'var(--c-amber)' : 'var(--c-muted)',
+                  boxShadow: airborne ? '0 0 6px var(--c-green)' : 'none',
                 }} />
                 <div style={styles.acInfo}>
                   <span style={styles.acReg}>{aircraft.registration}</span>
@@ -79,33 +107,38 @@ export function LiveFleetScreen({ getLive, loading, lastUpdated, error }) {
             );
           })}
         </div>
+
+        {/* No aircraft detected — elegant message */}
+        {!loading && detected === 0 && !error && (
+          <div style={styles.noSignal}>
+            <div style={styles.noSignalLine} />
+            <span style={styles.noSignalText}>No transponder signal detected</span>
+            <div style={styles.noSignalLine} />
+          </div>
+        )}
       </div>
 
-      {/* HUD overlay — bottom left */}
+      {/* ── HUD bottom-left : data status ── */}
       <div style={styles.hudBL}>
-        <div style={styles.dataRow}>
-          <span style={styles.dataLabel}>AIRBORNE</span>
-          <span style={{ ...styles.dataValue, color: airborneList.length > 0 ? 'var(--c-green)' : 'var(--c-subtle)' }}>
-            {airborneList.length}/{FLEET.length}
+        <div style={styles.blRow}>
+          <span style={styles.blLabel}>LAST UPDATE</span>
+          <span style={{ ...styles.blValue, color: lastUpdate ? 'var(--c-subtle)' : 'var(--c-muted)' }}>
+            {loading ? 'CONNECTING...' : error ? 'DATA ERROR' : lastUpdate || '—'}
           </span>
         </div>
-        <div style={styles.dataRow}>
-          <span style={styles.dataLabel}>DATA</span>
-          <span style={{ ...styles.dataValue, color: error ? 'var(--c-red)' : 'var(--c-subtle)' }}>
-            {loading ? 'CONNECTING...' : error ? 'ERROR' : lastUpdate ? `LIVE · ${lastUpdate}` : 'READY'}
+        <div style={styles.blRow}>
+          <span style={styles.blLabel}>SOURCE</span>
+          <span style={styles.blValue}>
+            OpenSky · ADS-B Exch.
           </span>
         </div>
-        <div style={styles.dataRow}>
-          <span style={styles.dataLabel}>SOURCE</span>
-          <span style={styles.dataValue}>OpenSky Network</span>
-        </div>
-        <div style={styles.dataRow}>
-          <span style={styles.dataLabel}>REFRESH</span>
-          <span style={styles.dataValue}>60s</span>
+        <div style={styles.blRow}>
+          <span style={styles.blLabel}>REFRESH</span>
+          <span style={styles.blValue}>45 s</span>
         </div>
       </div>
 
-      {/* Aircraft side panel */}
+      {/* Aircraft detail panel */}
       {panelOpen && selected && (
         <AircraftPanel
           aircraft={selected}
@@ -129,38 +162,89 @@ const styles = {
     paddingTop: 56,
     background: '#000',
   },
+
+  // ── HUD top-left ──
   hudTL: {
     position: 'absolute',
     top: 72,
     left: 16,
     zIndex: 50,
-    background: 'rgba(0,0,0,0.75)',
-    backdropFilter: 'blur(16px)',
-    WebkitBackdropFilter: 'blur(16px)',
+    background: 'rgba(0,0,0,0.82)',
+    backdropFilter: 'blur(20px)',
+    WebkitBackdropFilter: 'blur(20px)',
     border: '1px solid var(--c-border)',
     borderRadius: 3,
-    padding: '16px 16px 12px',
-    minWidth: 220,
-    maxWidth: 260,
+    padding: '14px 16px 12px',
+    minWidth: 230,
+    maxWidth: 270,
   },
-  hudTitle: {
+
+  hudHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 7,
+    marginBottom: 10,
+  },
+  liveDot: {
+    width: 5,
+    height: 5,
+    borderRadius: '50%',
+    background: 'var(--c-green)',
+    boxShadow: '0 0 8px var(--c-green)',
+    animation: 'pulse-ring 2s infinite',
+    flexShrink: 0,
+  },
+  liveLabel: {
     fontFamily: 'var(--f-mono)',
-    fontSize: 10,
+    fontSize: 9,
     letterSpacing: '3px',
     color: 'var(--c-gold)',
-    marginBottom: 4,
+    fontWeight: 500,
   },
-  hudSub: {
-    fontFamily: 'var(--f-sans)',
-    fontSize: 11,
-    color: 'var(--c-subtle)',
-    marginBottom: 14,
-    lineHeight: 1.4,
+
+  // Counter row
+  counterRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 0,
+    marginBottom: 12,
+    background: 'rgba(255,255,255,0.02)',
+    border: '1px solid var(--c-border)',
+    borderRadius: 2,
+    overflow: 'hidden',
   },
+  counter: {
+    flex: 1,
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    padding: '8px 4px',
+    gap: 2,
+  },
+  counterVal: {
+    fontFamily: 'var(--f-mono)',
+    fontSize: 18,
+    fontWeight: 300,
+    lineHeight: 1,
+  },
+  counterLabel: {
+    fontFamily: 'var(--f-mono)',
+    fontSize: 7,
+    letterSpacing: '1.5px',
+    color: 'var(--c-muted)',
+  },
+  counterDivider: {
+    width: 1,
+    height: 32,
+    background: 'var(--c-border)',
+    flexShrink: 0,
+  },
+
+  // Aircraft list
   acList: {
     display: 'flex',
     flexDirection: 'column',
-    gap: 4,
+    gap: 2,
   },
   acItem: {
     display: 'flex',
@@ -172,72 +256,102 @@ const styles = {
     padding: '7px 8px',
     cursor: 'pointer',
     textAlign: 'left',
-    transition: 'border-color 0.2s',
+    transition: 'background 0.15s, border-color 0.15s',
     width: '100%',
   },
-  acStatus: {
+  acDot: {
     width: 5,
     height: 5,
     borderRadius: '50%',
     flexShrink: 0,
+    transition: 'background 0.3s, box-shadow 0.3s',
   },
   acInfo: {
     flex: 1,
     display: 'flex',
     flexDirection: 'column',
     gap: 1,
+    overflow: 'hidden',
   },
   acReg: {
     fontFamily: 'var(--f-mono)',
     fontSize: 12,
     fontWeight: 400,
     color: 'var(--c-white)',
-    letterSpacing: '1px',
+    letterSpacing: '1.5px',
   },
   acType: {
     fontFamily: 'var(--f-sans)',
-    fontSize: 10,
+    fontSize: 9,
     color: 'var(--c-subtle)',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
   },
   acState: {
     fontFamily: 'var(--f-mono)',
-    fontSize: 8,
+    fontSize: 7.5,
     letterSpacing: '1.5px',
     flexShrink: 0,
+    transition: 'color 0.3s',
   },
+
+  // No signal
+  noSignal: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 10,
+    opacity: 0.6,
+  },
+  noSignalLine: {
+    flex: 1,
+    height: 1,
+    background: 'var(--c-border)',
+  },
+  noSignalText: {
+    fontFamily: 'var(--f-mono)',
+    fontSize: 8,
+    letterSpacing: '1px',
+    color: 'var(--c-muted)',
+    whiteSpace: 'nowrap',
+  },
+
+  // ── HUD bottom-left ──
   hudBL: {
     position: 'absolute',
     bottom: 16,
     left: 16,
     zIndex: 50,
-    background: 'rgba(0,0,0,0.75)',
-    backdropFilter: 'blur(16px)',
-    WebkitBackdropFilter: 'blur(16px)',
+    background: 'rgba(0,0,0,0.82)',
+    backdropFilter: 'blur(20px)',
+    WebkitBackdropFilter: 'blur(20px)',
     border: '1px solid var(--c-border)',
     borderRadius: 3,
-    padding: '12px 16px',
+    padding: '10px 14px',
     display: 'flex',
     flexDirection: 'column',
-    gap: 8,
+    gap: 7,
   },
-  dataRow: {
+  blRow: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 24,
+    gap: 20,
   },
-  dataLabel: {
+  blLabel: {
     fontFamily: 'var(--f-mono)',
-    fontSize: 8,
+    fontSize: 7.5,
     letterSpacing: '2px',
     color: 'var(--c-muted)',
   },
-  dataValue: {
+  blValue: {
     fontFamily: 'var(--f-mono)',
-    fontSize: 9,
-    letterSpacing: '1px',
+    fontSize: 8.5,
+    letterSpacing: '0.5px',
     color: 'var(--c-subtle)',
   },
+
   attribution: {
     position: 'absolute',
     bottom: 8,
